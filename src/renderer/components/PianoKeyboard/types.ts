@@ -12,5 +12,6 @@ export type PianoKeyboardProps = {
   midi?: number[];
   targets?: number[] | null;
   exactTargets?: boolean;
+  softTargets?: number[] | null;
   chord?: Chord;
 };

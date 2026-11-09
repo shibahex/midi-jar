@@ -30,6 +30,7 @@ const defaultProps = {
   midi: [],
   targets: null,
   exactTargets: false,
+  softTargets: null,
   chord: undefined,
 };
 
@@ -43,6 +44,7 @@ export const PianoKeyboard: React.FC<PianoKeyboardProps> = ({
   midi,
   targets,
   exactTargets,
+  softTargets,
   chord,
 }) => {
   const pianoRef = useRef<HTMLDivElement>(null);
@@ -56,7 +58,12 @@ export const PianoKeyboard: React.FC<PianoKeyboardProps> = ({
       fadeNotes(pianoRef.current, 'exactTarget');
       fadeNotes(pianoRef.current, 'wrapExactTarget');
       fadeTargets(pianoRef.current);
+      fadeTargets(pianoRef.current, 'softTarget');
       fadeLabels(pianoRef.current);
+
+      if (softTargets) {
+        highlightTargets(pianoRef.current, softTargets, 'softTarget');
+      }
 
       if (targets) {
         if (!exactTargets) {
@@ -113,7 +120,7 @@ export const PianoKeyboard: React.FC<PianoKeyboardProps> = ({
         }
       }
     }
-  }, [played, sustained, midi, targets, chord, keyboard, keySignature, exactTargets]);
+  }, [played, sustained, midi, targets, softTargets, chord, keyboard, keySignature, exactTargets]);
 
   useEffect(() => {
     if (pianoRef.current) {
@@ -144,10 +151,18 @@ export const PianoKeyboard: React.FC<PianoKeyboardProps> = ({
   return (
     <div ref={pianoRef} id={id} className={className} style={style}>
       {keyboard.skin === 'classic' && (
-        <ClassicPiano keyboard={keyboard} keySignature={keySignature} withTargets={!!targets} />
+        <ClassicPiano
+          keyboard={keyboard}
+          keySignature={keySignature}
+          withTargets={!!targets || !!softTargets}
+        />
       )}
       {keyboard.skin === 'flat' && (
-        <FlatPiano keyboard={keyboard} keySignature={keySignature} withTargets={!!targets} />
+        <FlatPiano
+          keyboard={keyboard}
+          keySignature={keySignature}
+          withTargets={!!targets || !!softTargets}
+        />
       )}
     </div>
   );

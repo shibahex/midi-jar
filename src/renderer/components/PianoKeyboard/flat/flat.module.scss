@@ -129,7 +129,8 @@
 // VARIANTS
 
 .--withTargets {
-  .white:global(.target) {
+  .white:global(.target),
+  .white:global(.softTarget) {
     .pianoKey {
       fill: $color-neutral-lighter;
     }
@@ -141,7 +142,8 @@
     }
   }
 
-  .black:global(.target) {
+  .black:global(.target),
+  .black:global(.softTarget) {
     .pianoKey {
       fill: $color-neutral-normal;
     }
