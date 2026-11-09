@@ -350,6 +350,107 @@
             },
             "type": "object"
         },
+        "scaleDegrees": {
+            "properties": {
+                "displayDegreeName": {
+                    "type": "boolean"
+                },
+                "displayReaction": {
+                    "type": "boolean"
+                },
+                "displayScaleNotes": {
+                    "type": "boolean"
+                },
+                "gameLength": {
+                    "type": "number"
+                },
+                "gamification": {
+                    "type": "boolean"
+                },
+                "mode": {
+                    "enum": [
+                        "random",
+                        "randomInKey"
+                    ],
+                    "type": "string"
+                },
+                "scales": {
+                    "enum": [
+                        "all",
+                        "major",
+                        "majorMinor",
+                        "minor",
+                        "minors",
+                        "modes",
+                        "pentatonics"
+                    ],
+                    "type": "string"
+                }
+            },
+            "type": "object"
+        },
+        "scaleQuiz": {
+            "properties": {
+                "direction": {
+                    "enum": [
+                        "down",
+                        "up",
+                        "upDown"
+                    ],
+                    "type": "string"
+                },
+                "displayFormula": {
+                    "type": "boolean"
+                },
+                "displayNoteNames": {
+                    "type": "boolean"
+                },
+                "displayReaction": {
+                    "type": "boolean"
+                },
+                "fingering": {
+                    "enum": [
+                        "both",
+                        "left",
+                        "none",
+                        "right"
+                    ],
+                    "type": "string"
+                },
+                "gamification": {
+                    "type": "boolean"
+                },
+                "jumpBack": {
+                    "type": "boolean"
+                },
+                "learningMode": {
+                    "type": "boolean"
+                },
+                "mode": {
+                    "enum": [
+                        "random",
+                        "randomInKey"
+                    ],
+                    "type": "string"
+                },
+                "requiredCleanRuns": {
+                    "type": "number"
+                },
+                "scales": {
+                    "enum": [
+                        "all",
+                        "major",
+                        "majorMinor",
+                        "minor",
+                        "minors",
+                        "modes",
+                        "pentatonics"
+                    ],
+                    "type": "string"
+                }
+            },
+            "type": "object"
+        },
         "server": {
             "properties": {
                 "enabled": {

@@ -2,7 +2,14 @@ import { getSettings } from '../settings';
 import { InternalOutput, MidiOutput } from './MidiOutput';
 
 export function getModuleOutputs() {
-  let moduleOutputs = ['chord-dictionary', 'chord-quiz', 'circle-of-fifths', 'debugger'];
+  let moduleOutputs = [
+    'chord-dictionary',
+    'chord-quiz',
+    'scale-quiz',
+    'scale-degrees',
+    'circle-of-fifths',
+    'debugger',
+  ];
   const chordDisplayOutputs = getSettings().chordDisplay.map(
     (module) => `chord-display/${module.id}`
   );

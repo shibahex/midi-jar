@@ -5,6 +5,8 @@ import {
   CircleOfFifthsSettings,
   KeyboardSettings,
   NotationSettings,
+  ScaleDegreesSettings,
+  ScaleQuizSettings,
 } from 'main/types';
 import { StoreType } from '../types/Store';
 
@@ -61,6 +63,30 @@ export const defaultChordQuizSettings: ChordQuizSettings = {
   displayIntervals: true,
 };
 
+export const defaultScaleQuizSettings: ScaleQuizSettings = {
+  mode: 'random' as const,
+  scales: 'majorMinor' as const,
+  direction: 'up' as const,
+  requiredCleanRuns: 0,
+  jumpBack: true,
+  learningMode: false,
+  fingering: 'right' as const,
+  gamification: true,
+  displayReaction: true,
+  displayNoteNames: false,
+  displayFormula: true,
+};
+
+export const defaultScaleDegreesSettings: ScaleDegreesSettings = {
+  mode: 'random' as const,
+  scales: 'majorMinor' as const,
+  gameLength: 8,
+  gamification: true,
+  displayReaction: true,
+  displayScaleNotes: false,
+  displayDegreeName: true,
+};
+
 export const defaultCircleOfFifthsSettings: CircleOfFifthsSettings = {
   scale: 'major' as const,
   highlightSector: 'chord' as const,
@@ -115,6 +141,8 @@ export const defaults: StoreType = {
     },
     chordDisplay: [defaultChordDisplaySettings],
     chordQuiz: defaultChordQuizSettings,
+    scaleQuiz: defaultScaleQuizSettings,
+    scaleDegrees: defaultScaleDegreesSettings,
     circleOfFifths: defaultCircleOfFifthsSettings,
     chordDictionary: defaultChordDictionarySettings,
     notation: defaultNotationSettings,

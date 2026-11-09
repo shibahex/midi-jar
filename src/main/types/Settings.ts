@@ -51,6 +51,39 @@ export type ChordQuizSettings = {
   displayIntervals: boolean;
 };
 
+export type ScaleSet =
+  | 'major'
+  | 'minor'
+  | 'majorMinor'
+  | 'modes'
+  | 'minors'
+  | 'pentatonics'
+  | 'all';
+
+export type ScaleQuizSettings = {
+  mode: 'random' | 'randomInKey';
+  scales: ScaleSet;
+  direction: 'up' | 'down' | 'upDown';
+  requiredCleanRuns: number;
+  jumpBack: boolean;
+  learningMode: boolean;
+  fingering: 'right' | 'left' | 'both' | 'none';
+  gamification: boolean;
+  displayReaction: boolean;
+  displayNoteNames: boolean;
+  displayFormula: boolean;
+};
+
+export type ScaleDegreesSettings = {
+  mode: 'random' | 'randomInKey';
+  scales: ScaleSet;
+  gameLength: number;
+  gamification: boolean;
+  displayReaction: boolean;
+  displayScaleNotes: boolean;
+  displayDegreeName: boolean;
+};
+
 export type CircleOfFifthsSettings = {
   scale: 'major' | 'minor';
   highlightSector: 'chord' | 'notes';
@@ -97,6 +130,8 @@ export type Settings = {
   general: GeneralSettings;
   chordDisplay: ChordDisplaySettings[];
   chordQuiz: ChordQuizSettings;
+  scaleQuiz: ScaleQuizSettings;
+  scaleDegrees: ScaleDegreesSettings;
   circleOfFifths: CircleOfFifthsSettings;
   chordDictionary: ChordDictionarySettings;
   notation: NotationSettings;

@@ -23,6 +23,8 @@ import ThumbnaildChordDictionary from 'renderer/assets/thumbnails/chord-dictiona
 import ThumbnaildCircleOfFifths from 'renderer/assets/thumbnails/circle-of-fifths.jpg';
 import ThumbnailRouting from 'renderer/assets/thumbnails/routing.jpg';
 import ThumbnailDebugger from 'renderer/assets/thumbnails/debugger.jpg';
+import ThumbnailScaleQuiz from 'renderer/assets/thumbnails/scale-quiz.jpg';
+import ThumbnailScaleDegrees from 'renderer/assets/thumbnails/scale-degrees.jpg';
 import { useServerState } from 'renderer/contexts/ServerState';
 import { useSettings } from 'renderer/contexts/Settings';
 import styles from './Home.module.scss';
@@ -115,6 +117,50 @@ const Home: React.FC = () => {
           >
             Chord Quiz
           </CardHeader>
+        </Card>
+        <Card outlined elevation={1}>
+          <CardThumbnail alt="Scale Quiz preview" src={ThumbnailScaleQuiz}>
+            <CardThumbnailOverlay as={NavLink} to="/scale-quiz" interactive />
+            {overlayEnabled && (
+              <CardThumbnailItem position="top-left">
+                <Button
+                  as="a"
+                  href={getOverlayUrl(state, '/scale-quiz')}
+                  target="_blank"
+                  aria-label="overlay"
+                  icon
+                  intent="primary"
+                  variant="ghost"
+                  hoverIntent
+                >
+                  <Icon name="overlay" />
+                </Button>
+              </CardThumbnailItem>
+            )}
+          </CardThumbnail>
+          <CardHeader left={<Icon name="quiz" />}>Scale Quiz</CardHeader>
+        </Card>
+        <Card outlined elevation={1}>
+          <CardThumbnail alt="Scale Degrees preview" src={ThumbnailScaleDegrees}>
+            <CardThumbnailOverlay as={NavLink} to="/scale-degrees" interactive />
+            {overlayEnabled && (
+              <CardThumbnailItem position="top-left">
+                <Button
+                  as="a"
+                  href={getOverlayUrl(state, '/scale-degrees')}
+                  target="_blank"
+                  aria-label="overlay"
+                  icon
+                  intent="primary"
+                  variant="ghost"
+                  hoverIntent
+                >
+                  <Icon name="overlay" />
+                </Button>
+              </CardThumbnailItem>
+            )}
+          </CardThumbnail>
+          <CardHeader left={<Icon name="quiz" />}>Scale Degrees</CardHeader>
         </Card>
         <Card outlined elevation={1}>
           <CardThumbnail alt="Circle of Fifths preview" src={ThumbnaildCircleOfFifths}>

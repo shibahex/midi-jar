@@ -13,11 +13,15 @@ import Layout from './views/Layout';
 import Home from './views/Home';
 import ChordDisplay from './views/ChordDisplay';
 import ChordQuiz from './views/ChordQuiz';
+import ScaleQuiz from './views/ScaleQuiz';
+import ScaleDegrees from './views/ScaleDegrees';
 import CircleOfFifths from './views/CircleOfFifths';
 
 import settingsRoutes from './views/Settings';
 import CircleOfFifthsSettings from './views/Settings/CircleOfFifthsSettings';
 import ChordQuizSettings from './views/Settings/ChordQuizSettings';
+import ScaleQuizSettings from './views/Settings/ScaleQuizSettings';
+import ScaleDegreesSettings from './views/Settings/ScaleDegreesSettings';
 
 import packageJSON from '../../package.json';
 import icon from '../../assets/icon.svg';
@@ -78,6 +82,30 @@ const router = createHashRouter(
         }
       >
         <Route path="settings" element={<ChordQuizSettings />} />
+      </Route>
+      <Route
+        path="scale-quiz"
+        handle={{ title: 'Scale Quiz', icon: <Icon name="quiz" />, hasSettings: true }}
+        element={
+          <MidiMessageManagerProvider namespace="scale-quiz" source="internal">
+            <ScaleQuiz />
+            <DrawerOutlet aria-label="Scale Quiz Settings" placement="right" size="lg" />
+          </MidiMessageManagerProvider>
+        }
+      >
+        <Route path="settings" element={<ScaleQuizSettings />} />
+      </Route>
+      <Route
+        path="scale-degrees"
+        handle={{ title: 'Scale Degrees', icon: <Icon name="quiz" />, hasSettings: true }}
+        element={
+          <MidiMessageManagerProvider namespace="scale-degrees" source="internal">
+            <ScaleDegrees />
+            <DrawerOutlet aria-label="Scale Degrees Settings" placement="right" size="lg" />
+          </MidiMessageManagerProvider>
+        }
+      >
+        <Route path="settings" element={<ScaleDegreesSettings />} />
       </Route>
       <Route
         path="chord-dictionary"

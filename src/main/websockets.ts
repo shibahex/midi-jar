@@ -10,6 +10,8 @@ const WS_NAMESPACES = [
   'settings',
   'chord-display',
   'chord-quiz',
+  'scale-quiz',
+  'scale-degrees',
   'circle-of-fifths',
   'chord-dictionary',
 ];

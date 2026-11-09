@@ -16,6 +16,8 @@ import ThumbnaildChordDisplay from 'renderer/assets/thumbnails/chord-display.jpg
 import ThumbnaildChordQuiz from 'renderer/assets/thumbnails/chord-quiz.jpg';
 import ThumbnaildCircleOfFifths from 'renderer/assets/thumbnails/circle-of-fifths.jpg';
 import ThumbnaildChordDictionary from 'renderer/assets/thumbnails/chord-dictionary.jpg';
+import ThumbnailScaleQuiz from 'renderer/assets/thumbnails/scale-quiz.jpg';
+import ThumbnailScaleDegrees from 'renderer/assets/thumbnails/scale-degrees.jpg';
 import { useSettings } from 'renderer/contexts/Settings';
 
 const Home: React.FC = () => {
@@ -44,6 +46,18 @@ const Home: React.FC = () => {
             <CardThumbnailOverlay as={NavLink} to="/quiz" interactive />
           </CardThumbnail>
           <CardHeader left={<Icon name="quiz" />}>Chord Quiz</CardHeader>
+        </Card>
+        <Card outlined elevation={1}>
+          <CardThumbnail alt="Scale Quiz preview" src={ThumbnailScaleQuiz}>
+            <CardThumbnailOverlay as={NavLink} to="/scale-quiz" interactive />
+          </CardThumbnail>
+          <CardHeader left={<Icon name="quiz" />}>Scale Quiz</CardHeader>
+        </Card>
+        <Card outlined elevation={1}>
+          <CardThumbnail alt="Scale Degrees preview" src={ThumbnailScaleDegrees}>
+            <CardThumbnailOverlay as={NavLink} to="/scale-degrees" interactive />
+          </CardThumbnail>
+          <CardHeader left={<Icon name="quiz" />}>Scale Degrees</CardHeader>
         </Card>
         <Card outlined elevation={1}>
           <CardThumbnail alt="Circle of Fifths preview" src={ThumbnaildCircleOfFifths}>

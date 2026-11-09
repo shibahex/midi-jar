@@ -78,6 +78,22 @@ const SettingsLayout: React.FC = () => (
           </NavTab>
           <NavTab
             className={cx('tab')}
+            to="/settings/scale-quiz"
+            title="Scale Quiz"
+            left={<Icon name="quiz" />}
+          >
+            <span className={cx('label')}>Scale Quiz</span>
+          </NavTab>
+          <NavTab
+            className={cx('tab')}
+            to="/settings/scale-degrees"
+            title="Scale Degrees"
+            left={<Icon name="quiz" />}
+          >
+            <span className={cx('label')}>Scale Degrees</span>
+          </NavTab>
+          <NavTab
+            className={cx('tab')}
             to="/settings/debug"
             title="Debugger"
             left={<Icon name="bug" />}

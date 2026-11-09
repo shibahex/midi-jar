@@ -1,0 +1,49 @@
+@import 'tokens';
+
+.base {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.badge {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  border: 2px solid;
+  background: $color-white;
+  color: $color-black;
+  font-weight: bold;
+  line-height: 1;
+  opacity: 0.85;
+  transition:
+    transform 0.15s,
+    opacity 0.15s;
+
+  &--right {
+    border-color: $color-primary-normal;
+  }
+
+  &--left {
+    border-color: $color-warning-normal;
+  }
+
+  &--next {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1.25);
+    box-shadow: 0 0 0 2px $color-white;
+
+    &.badge--right {
+      background: $color-primary-dark;
+      color: $color-white;
+    }
+
+    &.badge--left {
+      background: $color-warning-dark;
+      color: $color-white;
+    }
+  }
+}

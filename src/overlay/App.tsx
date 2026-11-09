@@ -10,6 +10,8 @@ import { ThemeProvider } from '@la-jarre-a-son/ui';
 import ChordDisplay from 'renderer/views/ChordDisplay';
 import ChordQuiz from 'renderer/views/ChordQuiz/ChordQuiz';
 import CircleOfFifths from 'renderer/views/CircleOfFifths';
+import ScaleQuiz from 'renderer/views/ScaleQuiz';
+import ScaleDegrees from 'renderer/views/ScaleDegrees';
 
 import './App.scss';
 
@@ -33,6 +35,22 @@ export default function App() {
                     element={
                       <MidiMessageManagerProvider namespace="chord-quiz" source="websocket">
                         <ChordQuiz />
+                      </MidiMessageManagerProvider>
+                    }
+                  />
+                  <Route
+                    path="scale-quiz"
+                    element={
+                      <MidiMessageManagerProvider namespace="scale-quiz" source="websocket">
+                        <ScaleQuiz />
+                      </MidiMessageManagerProvider>
+                    }
+                  />
+                  <Route
+                    path="scale-degrees"
+                    element={
+                      <MidiMessageManagerProvider namespace="scale-degrees" source="websocket">
+                        <ScaleDegrees />
                       </MidiMessageManagerProvider>
                     }
                   />
