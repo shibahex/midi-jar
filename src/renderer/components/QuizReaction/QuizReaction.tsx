@@ -5,20 +5,20 @@ import { randomPick } from 'renderer/helpers';
 import { STATUSES, GameState } from 'renderer/hooks/useQuiz';
 
 import { Reaction, REACTIONS, shouldTriggerNewReaction } from './utils';
-import styles from './Reaction.module.scss';
+import styles from './QuizReaction.module.scss';
 
 const cx = classnames.bind(styles);
 
 type Props = {
   className?: string;
-  gameState: GameState;
+  gameState: Pick<GameState, 'index' | 'status' | 'score'>;
 };
 
 const defaultProps = {
   className: undefined,
 };
 
-const ChordQuizReaction: React.FC<Props> = ({ className, gameState }) => {
+export const QuizReaction: React.FC<Props> = ({ className, gameState }) => {
   const [reaction, setReaction] = useState<Reaction | null>(null);
   const reactionTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -59,6 +59,6 @@ const ChordQuizReaction: React.FC<Props> = ({ className, gameState }) => {
   ) : null;
 };
 
-ChordQuizReaction.defaultProps = defaultProps;
+QuizReaction.defaultProps = defaultProps;
 
-export default ChordQuizReaction;
+export default QuizReaction;

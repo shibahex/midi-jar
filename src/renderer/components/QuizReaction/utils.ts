@@ -53,7 +53,10 @@ export const REACTIONS: { [key in STATUSES]?: string[] } = {
 /**
  * Returns true if the current game state should trigger a new reaction
  */
-export const shouldTriggerNewReaction = (gameState: GameState, reaction?: Reaction | null) => {
+export const shouldTriggerNewReaction = (
+  gameState: Pick<GameState, 'index' | 'status' | 'score'>,
+  reaction?: Reaction | null
+) => {
   return (
     gameState.status >= 0 &&
     (!reaction ||

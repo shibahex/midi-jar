@@ -17,3 +17,5 @@ export * from './CircleFifths';
 export * from './Notation';
 export * from './PianoKeyboard';
 export * from './MidiLearn';
+export * from './QuizGameList';
+export * from './QuizReaction';

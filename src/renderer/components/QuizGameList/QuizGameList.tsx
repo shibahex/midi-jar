@@ -3,31 +3,34 @@ import classnames from 'classnames/bind';
 
 import { Game } from 'renderer/hooks/useQuiz';
 
-import styles from './GameList.module.scss';
+import styles from './QuizGameList.module.scss';
 
 const cx = classnames.bind(styles);
 
-type IndexedGame = Game & {
+type IndexedGame = Pick<Game, 'score'> & {
   index: number;
 };
 
 type Props = {
   className?: string;
-  games: Game[];
+  games: Pick<Game, 'score'>[];
   gameIndex: number;
+  label?: string;
   maxCount?: number;
 };
 
 const defaultProps = {
   className: undefined,
   maxCount: 4,
+  label: 'GAME',
 };
 
-const GameList: React.FC<Props> = ({
+export const QuizGameList: React.FC<Props> = ({
   className,
   games,
   gameIndex,
   maxCount = defaultProps.maxCount,
+  label = defaultProps.label,
 }: Props) => {
   const displayedGames = useMemo(
     () =>
@@ -64,7 +67,9 @@ const GameList: React.FC<Props> = ({
           })}
           key={game.index}
         >
-          <span className={cx('label')}>GAME {game.index + 1}</span>
+          <span className={cx('label')}>
+            {label} {game.index + 1}
+          </span>
           <span className={cx('score')}>{game.score}</span>
         </li>
       ))}
@@ -72,6 +77,6 @@ const GameList: React.FC<Props> = ({
   );
 };
 
-GameList.defaultProps = defaultProps;
+QuizGameList.defaultProps = defaultProps;
 
-export default GameList;
+export default QuizGameList;

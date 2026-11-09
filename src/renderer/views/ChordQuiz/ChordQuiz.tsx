@@ -4,10 +4,7 @@ import classnames from 'classnames/bind';
 import { useSettings } from 'renderer/contexts/Settings';
 import useQuiz, { STATUSES, Game } from 'renderer/hooks/useQuiz';
 import useNotes from 'renderer/hooks/useNotes';
-import { ChordIntervals, ChordName } from 'renderer/components';
-
-import Reaction from './Reaction';
-import GameList from './GameList';
+import { ChordIntervals, ChordName, QuizGameList, QuizReaction } from 'renderer/components';
 
 import styles from './ChordQuiz.module.scss';
 
@@ -81,11 +78,11 @@ const ChordQuiz: React.FC = () => {
       <div className={cx('topContainer')}>
         {quizSettings.displayReaction && (
           <div className={cx('reactionContainer')}>
-            <Reaction gameState={gameState} />
+            <QuizReaction gameState={gameState} />
           </div>
         )}
         {quizSettings.gamification && (
-          <GameList className={cx('gameList')} games={games} gameIndex={gameState.gameIndex} />
+          <QuizGameList className={cx('gameList')} games={games} gameIndex={gameState.gameIndex} />
         )}
       </div>
 
