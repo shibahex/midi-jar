@@ -4,6 +4,7 @@ import { defaultScaleDegreesSettings, defaultScaleQuizSettings } from '../main/s
 import { STATUSES } from '../renderer/hooks/useQuiz';
 import * as ScaleQuiz from '../renderer/views/ScaleQuiz/reducer';
 import * as ScaleDegrees from '../renderer/views/ScaleDegrees/reducer';
+import { getOctaveShift, getPlayedStep } from '../renderer/views/ScaleQuiz/utils';
 
 const midiOf = (note: string) => Note.midi(`${note}4`) as number;
 
@@ -113,6 +114,30 @@ describe('ScaleQuiz reducer', () => {
     });
     expect(next.scale).toBe(state.scale);
     expect(next.position).toBe(1);
+  });
+});
+
+describe('ScaleQuiz keyboard octave', () => {
+  const state = ScaleQuiz.init({
+    options: { ...defaultScaleQuizSettings, mode: 'sequential', scales: 'major' },
+    key: 'C',
+  });
+
+  it('follows the octave of the played key', () => {
+    const tonic = state.steps[0];
+    expect(getOctaveShift(tonic, tonic.midi)).toBe(0);
+    expect(getOctaveShift(tonic, tonic.midi - 24)).toBe(-2);
+    expect(getOctaveShift(tonic, tonic.midi + 12)).toBe(1);
+    expect(getOctaveShift(tonic, tonic.midi - 60)).toBe(-3);
+  });
+
+  it('matches the expected step, or an earlier one when jumping back', () => {
+    const { steps } = state;
+    expect(getPlayedStep(steps, 2, steps[2].midi - 12, false)).toBe(steps[2]);
+    expect(getPlayedStep(steps, 2, steps[0].midi, false)).toBeUndefined();
+    expect(getPlayedStep(steps, 2, steps[0].midi, true)).toBe(steps[0]);
+    // the top tonic is the step expected, not the first one
+    expect(getPlayedStep(steps, 7, steps[7].midi, true)).toBe(steps[7]);
   });
 });
 

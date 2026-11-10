@@ -12,13 +12,12 @@ import {
   getKeySignature,
   getNoteInKeySignature,
   getScaleSequence,
-  isSamePitchClass,
 } from 'renderer/helpers';
 
 import ScaleQuizSteps from './ScaleQuizSteps';
 import ScaleQuizKeyboard from './ScaleQuizKeyboard';
 import { init, reducer, SCALES_PER_GAME } from './reducer';
-import { getFingers, getHands } from './utils';
+import { getFingers, getHands, getOctaveShift, getPlayedStep } from './utils';
 
 import styles from './ScaleQuiz.module.scss';
 
@@ -56,16 +55,18 @@ const ScaleQuiz: React.FC = () => {
   }, [key, accidentals, scale]);
 
   const [acceptedMidi, setAcceptedMidi] = useState<number[]>([]);
+  // the learning keyboard follows the octave the scale is played in
+  const [octaveShift, setOctaveShift] = useState(0);
 
   const onNoteOn = useCallback(
     (midi: number) => {
       const noteName = getNoteInKeySignature(Note.fromMidi(midi), keySignature.notes);
-      const accepted =
-        (!!steps[position] && isSamePitchClass(midi, steps[position].note)) ||
-        (quizSettings.jumpBack &&
-          steps.slice(0, position).some((step) => isSamePitchClass(midi, step.note)));
+      const playedStep = getPlayedStep(steps, position, midi, quizSettings.jumpBack);
 
-      if (accepted) setAcceptedMidi((list) => [...list, midi]);
+      if (playedStep) {
+        setAcceptedMidi((list) => [...list, midi]);
+        setOctaveShift(getOctaveShift(playedStep, midi));
+      }
       dispatch({ type: 'NOTE_ON', midi, noteName });
     },
     [keySignature, steps, position, quizSettings.jumpBack]
@@ -145,6 +146,7 @@ const ScaleQuiz: React.FC = () => {
           position={position}
           keySignature={keySignature}
           acceptedMidi={acceptedMidi}
+          octaveShift={octaveShift}
           hands={hands}
           fingers={fingers}
           playedMidiNotes={playedMidiNotes}

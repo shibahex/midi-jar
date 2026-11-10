@@ -17,10 +17,8 @@ const cx = classnames.bind(styles);
 const HAND_LABEL: Record<Hand, string> = { right: 'Right hand', left: 'Left hand' };
 const FINGER_NAMES = ['', 'thumb', 'index', 'middle', 'ring', 'pinky'];
 
-const keyboardSettings: KeyboardSettings = {
+const baseKeyboardSettings: KeyboardSettings = {
   ...defaultKeyboardSettings,
-  from: 'C4',
-  to: 'B5',
   label: 'pitchClass',
   keyInfo: 'none',
   textOpacity: 1,
@@ -28,14 +26,12 @@ const keyboardSettings: KeyboardSettings = {
   sizes: { ...defaultKeyboardSettings.sizes, height: 5 },
 };
 
-// with both hands, finger numbers take the place of key names
-const keyboardSettingsBothHands: KeyboardSettings = { ...keyboardSettings, keyName: 'none' };
-
 type Props = {
   steps: Step[];
   position: number;
   keySignature: KeySignatureConfig;
   acceptedMidi: number[];
+  octaveShift: number;
   hands: Hand[];
   fingers: Fingers;
   playedMidiNotes: number[];
@@ -44,10 +40,11 @@ type Props = {
 };
 
 const ScaleQuizKeyboard: React.FC<Props> = ({
-  steps,
+  steps: scaleSteps,
   position,
   keySignature,
   acceptedMidi,
+  octaveShift,
   hands,
   fingers,
   playedMidiNotes,
@@ -55,6 +52,24 @@ const ScaleQuizKeyboard: React.FC<Props> = ({
   midiNotes,
 }) => {
   const keyboardRef = useRef<HTMLDivElement>(null);
+
+  // two octaves from the octave the scale is played in
+  const steps = useMemo(
+    () => scaleSteps.map((step) => ({ ...step, midi: step.midi + 12 * octaveShift })),
+    [scaleSteps, octaveShift]
+  );
+
+  const keyboardSettings = useMemo(
+    (): KeyboardSettings => ({
+      ...baseKeyboardSettings,
+      from: `C${4 + octaveShift}`,
+      to: `B${5 + octaveShift}`,
+      // with both hands, finger numbers take the place of key names
+      keyName: hands.length > 1 ? 'none' : baseKeyboardSettings.keyName,
+    }),
+    [octaveShift, hands.length]
+  );
+
   const nextStep = steps[position];
 
   const scaleMidi = useMemo(() => steps.map((step) => step.midi), [steps]);
@@ -87,7 +102,7 @@ const ScaleQuizKeyboard: React.FC<Props> = ({
       <div className={cx('keyboardContainer')} ref={keyboardRef}>
         <PianoKeyboard
           className={cx('keyboard')}
-          keyboard={hands.length > 1 ? keyboardSettingsBothHands : keyboardSettings}
+          keyboard={keyboardSettings}
           keySignature={keySignature}
           softTargets={scaleMidi}
           targets={targets}
