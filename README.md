@@ -43,6 +43,7 @@ MIDI Jar includes:
 - A Chord Display module, to display a piano and monitor chords being played
 - A Circle of Fifths highly customizatble
 - A Chord Quiz module, with different modes and settings to train
+- A Scale Quiz module, to learn scales with a keyboard and fingering
 - A HTTP/Websocket server to include modules externally (in OBS Browser source for instance)
 - Running at startup
 - Running in background (no window, only Tray icon)
@@ -333,6 +334,30 @@ If the game mode is too annoying, you can turn off the scoring, the reactions, a
 Hopefully in the future, this module will be able to have an "Intelligent" mode capable of generating random chord progressions with key changes.
 
 [MIDI Jar - Chord Quiz example](https://user-images.githubusercontent.com/1231011/233844786-4f182b44-fcb8-4d24-b69d-532c6286f61e.mp4)
+
+
+## Scale Quiz
+
+![MIDI Jar Scale Quiz Example](assets/midi-jar-scale-quiz.png)
+
+You can learn scales by using the Scale Quiz module.
+
+A scale is asked, and you must play its notes one at a time, in any octave. Each right note scores points, a wrong note loses some, and playing the whole scale without a mistake gives a bonus that grows with your streak of perfect scales.
+
+You can choose which scales are asked:
+
+- `Scales`: Major, Natural Minor, both, the Modes (Ionian to Locrian), the Minor scales (natural, harmonic, melodic), Pentatonics & Blues, or all of them
+- `Tonic`: `random`, `in order` (going up from C to B through every key), or the tonic of the current key signature (in Notation settings)
+- `Keys`: all keys, or natural keys only (no sharp or flat tonic)
+- `Direction`: ascending, descending, or up and back down
+
+And how you practice them:
+
+- `Repeat until perfect`: the same scale is asked again until you play it 1, 2 or 3 times in a row without a mistake
+- `Jump back`: playing a note you already played (like the tonic) continues from that note instead of counting as a mistake
+- `Learning Mode`: displays a piano keyboard with the notes of the scale, the next key to play, and the fingering for the right hand, the left hand or both (standard fingerings for major and minor scales, computed for the other scales)
+
+Like the Chord Quiz, the scoring and reactions can be turned off, and you can display the note names and the formula (degrees) of the scale.
 
 
 ## What then ?
