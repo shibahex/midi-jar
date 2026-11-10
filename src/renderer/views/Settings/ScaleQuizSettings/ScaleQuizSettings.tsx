@@ -31,11 +31,24 @@ const ScaleQuizSettings: React.FC = () => {
 
           <FormField label="Tonic" hint="Choose how the tonic of the scale is picked">
             <Select
-              options={fields.mode.choices}
+              options={fields.scaleQuizMode.choices}
               onChange={(value) => updateSetting('scaleQuiz.mode', value)}
               value={settings.scaleQuiz.mode}
             />
           </FormField>
+
+          {settings.scaleQuiz.mode !== 'randomInKey' && (
+            <FormField
+              label="Keys"
+              hint="Choose if tonics can be sharp or flat (C# major, Bb minor...)"
+            >
+              <Select
+                options={fields.tonics.choices}
+                onChange={(value) => updateSetting('scaleQuiz.tonics', value)}
+                value={settings.scaleQuiz.tonics ?? 'all'}
+              />
+            </FormField>
+          )}
 
           <FormField label="Direction" hint="Choose in which direction the scale is played">
             <Select

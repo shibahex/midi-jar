@@ -11,6 +11,34 @@ export const fields = {
       },
     ],
   },
+  scaleQuizMode: {
+    choices: [
+      {
+        value: 'random',
+        label: 'Random',
+      },
+      {
+        value: 'sequential',
+        label: 'In order (C to B)',
+      },
+      {
+        value: 'randomInKey',
+        label: 'Tonic of the current Key',
+      },
+    ],
+  },
+  tonics: {
+    choices: [
+      {
+        value: 'all',
+        label: 'All keys',
+      },
+      {
+        value: 'natural',
+        label: 'Natural keys only (no sharps or flats)',
+      },
+    ],
+  },
   scales: {
     choices: [
       {

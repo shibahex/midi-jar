@@ -87,10 +87,16 @@ export function getBestScaleForChroma(chroma: number, type: string): ScaleInfo {
  * @param tonic - a fixed tonic, or null for a random one
  * @param previous - a scale to avoid picking twice in a row
  */
+const NATURAL_CHROMAS = [0, 2, 4, 5, 7, 9, 11];
+
+const getChromas = (naturalOnly: boolean) =>
+  naturalOnly ? NATURAL_CHROMAS : Array.from({ length: 12 }, (_, chroma) => chroma);
+
 export function getRandomScale(
   set: ScaleSet,
   tonic: string | null,
-  previous?: ScaleInfo | null
+  previous?: ScaleInfo | null,
+  naturalOnly = false
 ): ScaleInfo {
   const types = SCALE_SETS[set] ?? SCALE_SETS.majorMinor;
   let scale: ScaleInfo;
@@ -98,12 +104,26 @@ export function getRandomScale(
 
   do {
     const type = randomPick(types);
-    const chroma = tonic !== null ? Note.chroma(tonic) ?? 0 : Math.floor(Math.random() * 12);
+    const chroma = tonic !== null ? Note.chroma(tonic) ?? 0 : randomPick(getChromas(naturalOnly));
     scale = getBestScaleForChroma(chroma, type);
     attempts += 1;
   } while (previous && previous.id === scale.id && attempts < 10);
 
   return scale;
+}
+
+/**
+ * Scales in order, from C to B, every type of the set for each tonic
+ */
+export function getScaleSequence(set: ScaleSet, naturalOnly = false) {
+  const types = SCALE_SETS[set] ?? SCALE_SETS.majorMinor;
+  return getChromas(naturalOnly).flatMap((chroma) => types.map((type) => ({ chroma, type })));
+}
+
+export function getScaleInSequence(set: ScaleSet, index: number, naturalOnly = false) {
+  const sequence = getScaleSequence(set, naturalOnly);
+  const { chroma, type } = sequence[index % sequence.length];
+  return getBestScaleForChroma(chroma, type);
 }
 
 /**

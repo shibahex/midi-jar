@@ -429,7 +429,8 @@
                 "mode": {
                     "enum": [
                         "random",
-                        "randomInKey"
+                        "randomInKey",
+                        "sequential"
                     ],
                     "type": "string"
                 },
@@ -445,6 +446,13 @@
                         "minors",
                         "modes",
                         "pentatonics"
+                    ],
+                    "type": "string"
+                },
+                "tonics": {
+                    "enum": [
+                        "all",
+                        "natural"
                     ],
                     "type": "string"
                 }

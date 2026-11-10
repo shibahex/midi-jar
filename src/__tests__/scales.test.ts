@@ -4,6 +4,8 @@ import {
   getDegreeName,
   getOrdinal,
   getRandomScale,
+  getScaleInSequence,
+  getScaleSequence,
   SCALE_SETS,
 } from '../renderer/helpers/scales';
 
@@ -22,6 +24,30 @@ describe('scales helpers', () => {
         expect(scale.notes.some((note) => /##|bb/.test(note))).toBe(false);
       }
     });
+  });
+
+  it('goes through every key from C to B', () => {
+    const labels = Array.from({ length: 12 }, (_, i) => getScaleInSequence('major', i).label);
+    expect(labels[0]).toBe('C Major');
+    expect(labels[1]).toBe('D♭ Major');
+    expect(labels[11]).toBe('B Major');
+    expect(getScaleInSequence('major', 12).label).toBe('C Major');
+
+    const majorMinor = getScaleSequence('majorMinor');
+    expect(majorMinor).toHaveLength(24);
+    expect(majorMinor.slice(0, 2)).toEqual([
+      { chroma: 0, type: 'major' },
+      { chroma: 0, type: 'minor' },
+    ]);
+  });
+
+  it('can use natural keys only', () => {
+    expect(getScaleSequence('major', true)).toHaveLength(7);
+    const tonics = Array.from({ length: 7 }, (_, i) => getScaleInSequence('minor', i, true).tonic);
+    expect(tonics).toEqual(['C', 'D', 'E', 'F', 'G', 'A', 'B']);
+    for (let i = 0; i < 50; i += 1) {
+      expect(getRandomScale('all', null, null, true).tonic).toMatch(/^[A-G]$/);
+    }
   });
 
   it('uses the given tonic', () => {

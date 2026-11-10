@@ -2,7 +2,7 @@ import { Interval, Note } from 'tonal';
 
 import { STATUSES } from 'renderer/hooks/useQuiz';
 import { ScaleQuizSettings } from 'main/types';
-import { getRandomScale, isSamePitchClass, ScaleInfo } from 'renderer/helpers';
+import { getRandomScale, getScaleInSequence, isSamePitchClass, ScaleInfo } from 'renderer/helpers';
 
 /** Wrong attempts on the same note before its name is revealed */
 export const HINT_AFTER_MISTAKES = 2;
@@ -39,6 +39,8 @@ export type State = {
   key: string;
   scale: ScaleInfo;
   steps: Step[];
+  /** index of the scale when playing scales in order */
+  sequenceIndex: number;
   position: number;
   mistakes: number;
   positionMistakes: number;
@@ -76,20 +78,30 @@ export function buildSteps(scale: ScaleInfo, direction: ScaleQuizSettings['direc
   return up;
 }
 
-function newScale(options: ScaleQuizSettings, key: string, previous: ScaleInfo | null) {
-  const scale = getRandomScale(
-    options.scales,
-    options.mode === 'randomInKey' ? key : null,
-    previous
-  );
-  return { scale, steps: buildSteps(scale, options.direction) };
+function newScale(
+  options: ScaleQuizSettings,
+  key: string,
+  previous: ScaleInfo | null,
+  sequenceIndex: number
+) {
+  const naturalOnly = options.tonics === 'natural';
+  const scale =
+    options.mode === 'sequential'
+      ? getScaleInSequence(options.scales, sequenceIndex, naturalOnly)
+      : getRandomScale(
+          options.scales,
+          options.mode === 'randomInKey' ? key : null,
+          previous,
+          naturalOnly
+        );
+  return { scale, steps: buildSteps(scale, options.direction), sequenceIndex };
 }
 
 export function init({ options, key }: { options: ScaleQuizSettings; key: string }): State {
   return {
     options,
     key,
-    ...newScale(options, key, null),
+    ...newScale(options, key, null, 0),
     position: 0,
     mistakes: 0,
     positionMistakes: 0,
@@ -124,6 +136,7 @@ export function reducer(state: State, action: Action): State {
         key === state.key &&
         options.scales === state.options.scales &&
         options.mode === state.options.mode &&
+        options.tonics === state.options.tonics &&
         options.direction === state.options.direction;
 
       // display options do not restart the current scale
@@ -141,7 +154,7 @@ export function reducer(state: State, action: Action): State {
     case 'SKIP':
       return {
         ...state,
-        ...newScale(state.options, state.key, state.scale),
+        ...newScale(state.options, state.key, state.scale, state.sequenceIndex + 1),
         position: 0,
         mistakes: 0,
         positionMistakes: 0,
@@ -251,7 +264,7 @@ export function reducer(state: State, action: Action): State {
 
       return {
         ...state,
-        ...newScale(state.options, state.key, state.scale),
+        ...newScale(state.options, state.key, state.scale, state.sequenceIndex + 1),
         eventCount,
         lastPlayed,
         position: 0,

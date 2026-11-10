@@ -65,6 +65,7 @@ export const defaultChordQuizSettings: ChordQuizSettings = {
 
 export const defaultScaleQuizSettings: ScaleQuizSettings = {
   mode: 'random' as const,
+  tonics: 'all' as const,
   scales: 'majorMinor' as const,
   direction: 'up' as const,
   requiredCleanRuns: 0,

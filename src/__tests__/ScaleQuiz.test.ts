@@ -89,6 +89,18 @@ describe('ScaleQuiz reducer', () => {
     expect(play(state, state.steps[1].note)).toBe(state);
   });
 
+  it('plays scales in order', () => {
+    let state = ScaleQuiz.init({
+      options: { ...defaultScaleQuizSettings, mode: 'sequential', scales: 'major' },
+      key: 'C',
+    });
+    expect(state.scale.label).toBe('C Major');
+    state = playRun(state);
+    expect(state.scale.label).toBe('D♭ Major');
+    state = ScaleQuiz.reducer(state, { type: 'SKIP' });
+    expect(state.scale.label).toBe('D Major');
+  });
+
   it('does not restart the scale when a display option changes', () => {
     const state = ScaleQuiz.init({
       options: defaultScaleQuizSettings,

@@ -11,6 +11,7 @@ import {
   formatSharpsFlats,
   getKeySignature,
   getNoteInKeySignature,
+  getScaleSequence,
   isSamePitchClass,
 } from 'renderer/helpers';
 
@@ -84,6 +85,11 @@ const ScaleQuiz: React.FC = () => {
 
   const { requiredCleanRuns } = quizSettings;
 
+  const sequenceLength = useMemo(
+    () => getScaleSequence(quizSettings.scales, quizSettings.tonics === 'natural').length,
+    [quizSettings.scales, quizSettings.tonics]
+  );
+
   return (
     <div id="ScaleQuiz" className={cx('base', { 'base--learning': quizSettings.learningMode })}>
       <div className={cx('topContainer')}>
@@ -150,6 +156,8 @@ const ScaleQuiz: React.FC = () => {
       <div className={cx('playedContainer')}>
         <div className={cx('progress')}>
           Scale {(state.completed % SCALES_PER_GAME) + 1} / {SCALES_PER_GAME}
+          {quizSettings.mode === 'sequential' &&
+            ` · C to B ${(state.sequenceIndex % sequenceLength) + 1} / ${sequenceLength}`}
           {` · ${state.mistakes} mistake${state.mistakes === 1 ? '' : 's'}`}
           {requiredCleanRuns > 0 && ` · perfect runs ${state.cleanRuns} / ${requiredCleanRuns}`}
           {state.perfectStreak > 1 && ` · ${state.perfectStreak} perfect in a row`}

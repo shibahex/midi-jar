@@ -61,7 +61,8 @@ export type ScaleSet =
   | 'all';
 
 export type ScaleQuizSettings = {
-  mode: 'random' | 'randomInKey';
+  mode: 'random' | 'randomInKey' | 'sequential';
+  tonics: 'all' | 'natural';
   scales: ScaleSet;
   direction: 'up' | 'down' | 'upDown';
   requiredCleanRuns: number;
