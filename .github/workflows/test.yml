@@ -30,10 +30,14 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      # @electron/rebuild pulls in node-gyp 9, which can't detect Visual Studio 2026.
-      # Replace the copy in ./node_modules before any native module gets compiled.
-      - name: Use node-gyp with Visual Studio 2026 support
-        run: npm install --no-save --ignore-scripts node-gyp@12
+      # @electron/rebuild and others pull in node-gyp 9, which can't detect Visual Studio 2026.
+      # Force every copy in the dependency tree to node-gyp 12 (CI-only, nothing is committed).
+      - name: Force node-gyp 12 everywhere
+        shell: bash
+        run: |
+          npm pkg set "overrides.node-gyp=^12.2.0"
+          npm install --no-save --ignore-scripts
+          npm ls node-gyp --all || true
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
