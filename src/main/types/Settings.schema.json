@@ -276,6 +276,10 @@
                         "randomInKey"
                     ],
                     "type": "string"
+                },
+                "retryUntilCorrect": {
+                    "description": "stays on the chord after a wrong answer, until the right chord is played",
+                    "type": "boolean"
                 }
             },
             "type": "object"

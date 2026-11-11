@@ -73,6 +73,17 @@ const ChordQuizSettings: React.FC = () => {
           </FormField>
 
           <FormControlLabel
+            label="Retry until correct"
+            hint="Stays on the chord after a wrong answer, until the right chord is played (each miss still loses points)"
+            reverse
+          >
+            <Switch
+              onChange={(value) => updateSetting('chordQuiz.retryUntilCorrect', value)}
+              checked={settings.chordQuiz.retryUntilCorrect}
+            />
+          </FormControlLabel>
+
+          <FormControlLabel
             label="Learning Mode"
             hint="Displays a piano keyboard with the keys of the chord to play"
             reverse

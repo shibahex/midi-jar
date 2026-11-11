@@ -330,6 +330,10 @@ And finally, to adapt your training, you can choose the difficulty, each levels 
 - `Very Hard`: maj6/9add#11, maj9b5, maj9#9, majb9#9, maj#11b9, maj11#9, maj13#11, min9#5, min11#5, min13#5, min11b11, minmaj9addb13, minmaj11addb13, minmaj9#11, minmaj11b11, min9b5, min7b5b9, min11b5, dom9b5, dom11b5, dom13b5, dom9#11, dom9addb13, dom7b9#9, dom7b9#11, dom7b9b13, dom11b13, dom13#9, dom13#11, dom11susb2, dom7sus4addb13, aug9, aug11, aug13, augmaj9, augadd#9, augmaj7b9, aug7b9, augsus4add7
 - `All Chords`: the rest of the dictionary
 
+### Retry until correct
+
+Turn on `Retry until correct` to stay on the same chord after a wrong answer, until you play it right (each miss still loses points).
+
 ### Learning Mode
 
 Turn on `Learning Mode` to display a piano keyboard with the keys of the chord to play, and the finger numbers for the right hand, the left hand or both (1 is the thumb, 5 is the pinky). The keyboard follows the octave you play in, and any inversion of the chord is accepted.

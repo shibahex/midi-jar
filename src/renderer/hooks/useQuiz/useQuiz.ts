@@ -33,6 +33,8 @@ interface State {
   parameters: Parameters;
   games: Game[];
   gameState: GameState;
+  /** wrong answers on the current chord */
+  attempts: number;
 }
 
 function reducer(state: State, action: Action): State {
@@ -50,6 +52,7 @@ function reducer(state: State, action: Action): State {
         ...state,
         parameters,
         games: [game],
+        attempts: 0,
         gameState: {
           gameIndex: 0,
           index: 0,
@@ -93,11 +96,29 @@ function reducer(state: State, action: Action): State {
       if (gameStateStatus > -1) {
         const games = [...state.games];
         const currentGame = games[state.gameState.gameIndex];
+        const correct = gameStateStatus >= STATUSES.equal;
+        const { score } = state.gameState;
 
-        if (gameStateStatus > 1) {
+        // wrong or incomplete chord: stay on it until the right chord is played
+        if (!correct && state.parameters.retryUntilCorrect) {
+          currentGame.score += score;
+          return {
+            ...state,
+            games,
+            attempts: state.attempts + 1,
+            gameState: {
+              ...state.gameState,
+              status: STATUSES.none,
+              chord: null,
+              score: 0,
+            },
+          };
+        }
+
+        if (correct) {
           currentGame.succeeded += 1;
         }
-        currentGame.score += state.gameState.score;
+        currentGame.score += score;
         currentGame.played.push(state.gameState.chord);
 
         if (state.gameState.index + 2 >= currentGame.chords.length) {
@@ -111,6 +132,7 @@ function reducer(state: State, action: Action): State {
         return {
           ...state,
           games,
+          attempts: 0,
           gameState: {
             gameIndex:
               state.gameState.index + 1 === currentGame.chords.length
@@ -151,6 +173,7 @@ const defaultState: State = {
     accidentals: defaults.settings.notation.accidentals,
   },
   games: [],
+  attempts: 0,
   gameState: {
     gameIndex: 0,
     index: 0,

@@ -362,6 +362,7 @@ const migrations: Migrations<StoreType> = {
         learningMode: false,
         fingering: 'right',
         displayRelative: false,
+        retryUntilCorrect: false,
         ...settings.chordQuiz,
       },
       scaleQuiz: {

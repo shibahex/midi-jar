@@ -21,7 +21,12 @@ const ChordQuiz: React.FC = () => {
 
   const { chords, pitchClasses, playedMidiNotes, sustainedMidiNotes, midiNotes } = useNotes();
 
-  const { games, gameState } = useQuiz(pitchClasses, chords, quizSettings, notationSettings);
+  const { games, gameState, attempts } = useQuiz(
+    pitchClasses,
+    chords,
+    quizSettings,
+    notationSettings
+  );
 
   const chordElements = useMemo(
     () =>
@@ -142,6 +147,11 @@ const ChordQuiz: React.FC = () => {
       <div className={cx('playedContainer')}>
         <div className={cx('progress')}>
           {gameState.index + 1} / {games[gameState.gameIndex].chords.length}
+          {quizSettings.retryUntilCorrect && attempts > 0 && (
+            <span className={cx('retry')}>
+              {' · '}Try again ({attempts} {attempts === 1 ? 'miss' : 'misses'})
+            </span>
+          )}
         </div>
         {quizSettings.gamification && <div className={cx('score')}>{gameState.score} pts</div>}
         <div className={cx('playedChord')}>

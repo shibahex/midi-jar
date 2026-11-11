@@ -55,6 +55,8 @@ export type ChordQuizSettings = {
   learningMode: boolean;
   fingering: Fingering;
   displayRelative: boolean;
+  /** stays on the chord after a wrong answer, until the right chord is played */
+  retryUntilCorrect: boolean;
 };
 
 export type ScaleSet =

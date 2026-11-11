@@ -64,6 +64,7 @@ export const defaultChordQuizSettings: ChordQuizSettings = {
   learningMode: false,
   fingering: 'right' as const,
   displayRelative: false,
+  retryUntilCorrect: false,
 };
 
 export const defaultScaleQuizSettings: ScaleQuizSettings = {
