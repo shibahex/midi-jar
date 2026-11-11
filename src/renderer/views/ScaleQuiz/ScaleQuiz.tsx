@@ -87,7 +87,7 @@ const ScaleQuiz: React.FC = () => {
       <div className={cx('topContainer')}>
         <div className={cx('reactionContainer')}>
           {requiredCleanRuns > 1 && (
-            <QuizRuns done={state.cleanRuns} required={requiredCleanRuns} />
+            <QuizRuns className={cx('runs')} done={state.cleanRuns} required={requiredCleanRuns} />
           )}
           {quizSettings.displayReaction && (
             <div className={cx('reaction')}>
@@ -139,6 +139,7 @@ const ScaleQuiz: React.FC = () => {
         displayFormula={quizSettings.displayFormula}
         hands={hands}
         fingers={fingers}
+        compact={quizSettings.learningMode}
       />
 
       {quizSettings.learningMode && (
@@ -162,7 +163,6 @@ const ScaleQuiz: React.FC = () => {
           {quizSettings.mode === 'sequential' &&
             ` · C to B ${(state.sequenceIndex % sequenceLength) + 1} / ${sequenceLength}`}
           {` · ${state.mistakes} mistake${state.mistakes === 1 ? '' : 's'}`}
-          {state.perfectStreak > 1 && ` · ${state.perfectStreak} perfect in a row`}
         </div>
         {quizSettings.gamification && (
           <div className={cx('score')}>{state.games[state.games.length - 1].score} pts</div>

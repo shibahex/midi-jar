@@ -117,6 +117,28 @@ $View_ScaleQuiz_textShadow: 0 0.05em 0.1em rgba($color-black, 0.6) !default;
   padding: 0 $space-lg;
 }
 
+// direction being played, above the notes
+.direction {
+  margin-top: min(3vh, 2.5vw);
+  padding: 0.1em 0.8em;
+  border-radius: 1em;
+  border: 2px solid $color-primary-normal;
+  color: $color-primary-light;
+  font-size: clamp(12px, min(2.4vh, 2vw), 22px);
+  font-weight: bold;
+  letter-spacing: 0.05em;
+  animation: appear 0.3s ease;
+
+  &--down {
+    border-color: $color-warning-normal;
+    color: $color-warning-light;
+  }
+
+  + .steps {
+    margin-top: min(1.5vh, 1.2vw);
+  }
+}
+
 .steps {
   display: flex;
   flex-wrap: wrap;
@@ -148,6 +170,13 @@ $View_ScaleQuiz_textShadow: 0 0.05em 0.1em rgba($color-black, 0.6) !default;
     border-color: $color-success-normal;
     background: $color-success-dark;
     animation: pop 0.25s ease;
+  }
+
+  // played on the way up, still to play on the way down
+  &--passed {
+    opacity: 0.8;
+    border-color: $color-success-dark;
+    background: rgba($color-success-dark, 0.35);
   }
 
   &--current {
@@ -191,13 +220,33 @@ $View_ScaleQuiz_textShadow: 0 0.05em 0.1em rgba($color-black, 0.6) !default;
 
 /** Learning keyboard **/
 
+// compact, to leave room above for the run counter and the reactions
 .base--learning {
   .scaleName {
-    font-size: clamp(24px, min(8vh, 6vw), 80px);
+    font-size: clamp(22px, min(6vh, 5vw), 64px);
   }
 
-  .steps {
+  .relative {
+    margin-top: 0.1em;
+    font-size: clamp(13px, min(2.6vh, 2.2vw), 26px);
+  }
+
+  .reaction {
+    height: min(5vh, 5vw);
+  }
+
+  .runs {
+    font-size: clamp(11px, min(2vh, 2vw), 20px);
+    gap: 0.25em;
+  }
+
+  .steps,
+  .direction {
     margin-top: min(2.5vh, 2vw);
+  }
+
+  .direction + .steps {
+    margin-top: min(1.5vh, 1.2vw);
   }
 }
 
