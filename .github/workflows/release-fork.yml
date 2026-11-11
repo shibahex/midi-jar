@@ -25,6 +25,8 @@ jobs:
             target: --win
 
     runs-on: ${{ matrix.os }}
+    # a stuck build fails instead of running for hours
+    timeout-minutes: 60
 
     steps:
       - name: Checkout git repo
