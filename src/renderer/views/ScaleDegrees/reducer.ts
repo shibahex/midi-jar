@@ -52,7 +52,8 @@ function newScale(options: ScaleDegreesSettings, key: string, previous: ScaleInf
   const scale = getRandomScale(
     options.scales,
     options.mode === 'randomInKey' ? key : null,
-    previous
+    previous,
+    options.tonics === 'natural'
   );
   return {
     scale,
@@ -106,7 +107,8 @@ export function reducer(state: State, action: Action): State {
       if (
         key === state.key &&
         options.scales === state.options.scales &&
-        options.mode === state.options.mode
+        options.mode === state.options.mode &&
+        options.tonics === state.options.tonics
       ) {
         return { ...state, options };
       }

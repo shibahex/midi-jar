@@ -64,6 +64,8 @@ export type State = {
   acceptedMidi: number[];
   /** octaves between the played keys and the learning keyboard default octave */
   octaveShift: number;
+  /** last scale finished and the scale that follows, shown for a moment */
+  transition: { id: number; from: string; to: string } | null;
 };
 
 /**
@@ -142,6 +144,7 @@ export function init({ options, key }: { options: ScaleQuizSettings; key: string
     bestPosition: 0,
     acceptedMidi: [],
     octaveShift: 0,
+    transition: null,
   };
 }
 
@@ -315,9 +318,12 @@ export function reducer(state: State, action: Action): State {
         games = [...games, { score: 0 }];
       }
 
+      const next = newScale(state.options, state.key, state.scale, state.sequenceIndex + 1);
+
       return {
         ...state,
-        ...newScale(state.options, state.key, state.scale, state.sequenceIndex + 1),
+        ...next,
+        transition: { id: completed, from: state.scale.label, to: next.scale.label },
         eventCount,
         lastPlayed,
         lastAccepted: step.note,

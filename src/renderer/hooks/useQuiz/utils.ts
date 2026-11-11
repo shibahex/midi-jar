@@ -2,7 +2,7 @@ import { Note, Chord, ChordType } from 'tonal';
 import { Chord as TChord } from '@tonaljs/chord';
 import { isEqual, isSubsetOf, isSupersetOf } from '@tonaljs/pcset';
 
-import { ChordQuizSettings, NotationSettings } from 'main/types';
+import { ChordQuizSettings, ChordSet, NotationSettings } from 'main/types';
 
 import {
   randomPick,
@@ -14,6 +14,12 @@ import {
   getChordDegrees,
   stringRotate,
   removeIntervalWildcards,
+  formatSharpsFlats,
+  getBestScaleForChroma,
+  getIncludedProgressions,
+  getProgressionChords,
+  getRelativeScale,
+  getScaleInfo,
 } from 'renderer/helpers';
 
 export enum STATUSES {
@@ -26,11 +32,22 @@ export enum STATUSES {
 
 export type Parameters = Pick<NotationSettings, 'key' | 'accidentals'> & ChordQuizSettings;
 
+/** The progression a game is made of, for display */
+export type GameProgression = {
+  label: string;
+  /** e.g. "G major" */
+  keyLabel: string;
+  numerals: string[];
+  /** chord names, e.g. "Em" */
+  names: string[];
+};
+
 export type Game = {
   score: number;
   chords: TChord[];
   played: (TChord | null)[];
   succeeded: number;
+  progression?: GameProgression;
 };
 
 export type GameState = {
@@ -235,55 +252,99 @@ export function getRandomKeySignature() {
   return keySignature;
 }
 
+type ChordTypeInfo = ReturnType<typeof ChordType.all>[number];
+
+/** Chord types of each chord set (tonal names) */
+export const CHORD_SETS: Record<Exclude<ChordSet, 'all'>, string[]> = {
+  majorMinor: ['M', 'm'],
+  triads: ['M', 'm', 'dim', 'aug', 'sus2', 'sus4'],
+  sevenths: ['maj7', 'm7', '7', 'm7b5', 'dim7', 'mMaj7'],
+  ninths: ['maj9', 'm9', '9', '7b9', '7#9', 'add9'],
+  triadsSevenths: [
+    'M',
+    'm',
+    'dim',
+    'aug',
+    'sus2',
+    'sus4',
+    'maj7',
+    'm7',
+    '7',
+    'm7b5',
+    'dim7',
+    'mMaj7',
+  ],
+};
+
+/** Natural notes, for "natural keys only" */
+const NATURAL_NOTES = ['C', 'D', 'E', 'F', 'G', 'A', 'B'];
+
 /**
- * Picks a random chord for a specified keySignature and complexity
- *
- * @param keySignature
- * @param chordComplexity
- * @returns
+ * Chords of a set that are asked: every chord of the set but the excluded ones
+ * (all of them if every chord is excluded)
  */
-export function getRandomChord(keySignature: KeySignatureConfig, chordComplexity: number) {
-  const chordTypes = ChordType.all().filter(
+export function getIncludedChords(chords: Exclude<ChordSet, 'all'>, excluded: string[] = []) {
+  const included = CHORD_SETS[chords].filter((alias) => !excluded.includes(alias));
+  return included.length ? included : CHORD_SETS[chords];
+}
+
+/**
+ * Chord types that can be asked: chords of a set, or every chord up to a difficulty
+ */
+export function getChordTypes(
+  chords: ChordSet | undefined,
+  chordComplexity: number,
+  excluded: string[] = []
+) {
+  if (chords && chords !== 'all') {
+    return getIncludedChords(chords, excluded)
+      .map((alias) => ChordType.get(alias))
+      .filter((type) => !type.empty);
+  }
+
+  return ChordType.all().filter(
     (chord) =>
       chord.intervals.length > 2 &&
       Math.min(COMPLEXITY_MAX, calculateComplexity(chord.intervals)) <= chordComplexity
   );
+}
 
+/**
+ * Picks a random chord of the given types, with a tonic spelled in the key signature
+ *
+ * @param naturalOnly - tonics without sharp or flat
+ */
+export function getRandomChord(
+  keySignature: KeySignatureConfig,
+  chordTypes: ChordTypeInfo[],
+  naturalOnly = false
+) {
   const type = randomPick(chordTypes);
 
-  const tonic = getNoteInKeySignature(randomPick(NOTE_NAMES), keySignature.notes);
+  const tonic = naturalOnly
+    ? randomPick(NATURAL_NOTES)
+    : getNoteInKeySignature(randomPick(NOTE_NAMES), keySignature.notes);
 
   return Chord.getChord(type.aliases[0], tonic);
 }
 
 /**
- * Picks a random chord in a key signature, with given complexity
- *
- * @param keySignature
- * @param chordComplexity
- * @returns
+ * Picks a random chord of the given types, built on a note of the key and staying in the key
  */
-export function getRandomChordInKey(keySignature: KeySignatureConfig, chordComplexity: number) {
+export function getRandomChordInKey(keySignature: KeySignatureConfig, chordTypes: ChordTypeInfo[]) {
   const keyChroma = Note.chroma(keySignature.tonic) ?? 0;
-  let chordTypes: ReturnType<typeof ChordType.all> = [];
-  let tonic;
 
-  while (!chordTypes.length) {
-    tonic = randomPick(keySignature.scale);
+  // chords of the types that fit in the key, on each note of the key
+  const candidates = keySignature.scale.flatMap((tonic) => {
     const chroma = Note.chroma(tonic) ?? 0;
-    const scaleChroma = stringRotate(IN_KEY_SCALE_CHROMA, chroma - keyChroma);
+    const isInKey = isSubsetOf(stringRotate(IN_KEY_SCALE_CHROMA, chroma - keyChroma));
+    return chordTypes.filter((type) => isInKey(type.chroma)).map((type) => ({ type, tonic }));
+  });
 
-    const isInKey = isSubsetOf(scaleChroma);
-
-    chordTypes = ChordType.all().filter(
-      (chord) =>
-        chord.intervals.length > 2 &&
-        Math.min(COMPLEXITY_MAX, calculateComplexity(chord.intervals)) <= chordComplexity &&
-        isInKey(chord.chroma)
-    );
-  }
-
-  const type = randomPick(chordTypes);
+  // some types never fit in a key (e.g. 7#9): fall back to any tonic of the key
+  const { type, tonic } = candidates.length
+    ? randomPick(candidates)
+    : { type: randomPick(chordTypes), tonic: randomPick(keySignature.scale) };
 
   return Chord.getChord(type.aliases[0], tonic);
 }
@@ -303,14 +364,58 @@ export function generateChords(
     .fill(null)
     .reduce<TChord[]>((acc, _, index) => {
       let newChord;
+      let attempts = 0;
       const previous = acc.length ? acc[acc.length - 1] : null;
+      // a few tries only: with few chords to pick from, the same chord can come twice
       do {
         newChord = generator(index, acc);
-      } while (previous && previous.symbol === newChord.symbol);
+        attempts += 1;
+      } while (previous && previous.symbol === newChord.symbol && attempts < 20);
 
       acc.push(newChord);
       return acc;
     }, []);
+}
+
+const NATURAL_CHROMAS = [0, 2, 4, 5, 7, 9, 11];
+
+/**
+ * A game of a progression, in a random key or the current key, repeated to about the game length
+ */
+export function generateProgressionGame(parameters: Parameters): Game {
+  const progression = randomPick(
+    getIncludedProgressions(parameters.excludedProgressions, parameters.customProgressions)
+  );
+
+  let tonic: string;
+  if (parameters.progressionKey === 'current') {
+    // minor progressions are played in the relative minor of the current key
+    const majorKey = getScaleInfo(parameters.key, 'major');
+    tonic =
+      progression.mode === 'major' ? parameters.key : getRelativeScale(majorKey)?.tonic ?? 'A';
+  } else {
+    const chromas =
+      parameters.tonics === 'natural'
+        ? NATURAL_CHROMAS
+        : Array.from({ length: 12 }, (_, chroma) => chroma);
+    tonic = getBestScaleForChroma(randomPick(chromas), progression.mode).tonic;
+  }
+
+  const chords = getProgressionChords(progression, tonic);
+  const repeats = Math.max(1, Math.round(parameters.gameLength / chords.length));
+
+  return {
+    chords: Array.from({ length: repeats }, () => chords.map((c) => c.chord)).flat(),
+    score: 0,
+    played: [],
+    succeeded: 0,
+    progression: {
+      label: progression.label,
+      keyLabel: `${formatSharpsFlats(tonic)} ${progression.mode}`,
+      numerals: chords.map((c) => c.numeral),
+      names: chords.map((c) => c.name),
+    },
+  };
 }
 
 /**
@@ -320,11 +425,19 @@ export function generateChords(
  * @returns
  */
 export function generateGame(parameters: Parameters) {
+  if (parameters.mode === 'progressions') {
+    return generateProgressionGame(parameters);
+  }
   if (parameters.mode === 'random') {
     const keySignature = getRandomKeySignature();
+    const chordTypes = getChordTypes(
+      parameters.chords,
+      parameters.difficulty,
+      parameters.excludedChords
+    );
     const game = {
       chords: generateChords(parameters.gameLength, () =>
-        getRandomChord(keySignature, parameters.difficulty)
+        getRandomChord(keySignature, chordTypes, parameters.tonics === 'natural')
       ),
       score: 0,
       played: [],
@@ -335,9 +448,14 @@ export function generateGame(parameters: Parameters) {
   }
   if (parameters.mode === 'randomInKey') {
     const keySignature = getKeySignature(parameters.key, parameters.accidentals === 'sharp');
+    const chordTypes = getChordTypes(
+      parameters.chords,
+      parameters.difficulty,
+      parameters.excludedChords
+    );
     const game = {
       chords: generateChords(parameters.gameLength, () =>
-        getRandomChordInKey(keySignature, parameters.difficulty)
+        getRandomChordInKey(keySignature, chordTypes)
       ),
       score: 0,
       played: [],

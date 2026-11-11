@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import classnames from 'classnames/bind';
 import {
   Button,
@@ -12,7 +12,14 @@ import {
 } from '@la-jarre-a-son/ui';
 
 import { useSettings } from 'renderer/contexts/Settings';
+import { CHORD_SETS, getIncludedChords } from 'renderer/hooks/useQuiz';
 import { Icon, ScrollContainer } from 'renderer/components';
+import {
+  getIncludedProgressions,
+  getProgressionChords,
+  parseProgression,
+  PROGRESSIONS,
+} from 'renderer/helpers';
 
 import { chordsByComplexity, fields } from './constants';
 
@@ -20,8 +27,126 @@ import styles from './ChordQuizSettings.module.scss';
 
 const cx = classnames.bind(styles);
 
+// clearer names for the triads
+const CHORD_LABELS: Record<string, string> = { M: 'maj', m: 'min' };
+
+/**
+ * A list of left out items, toggled by clicks.
+ * Settings come back from the main process a moment after each change:
+ * clicks build on this local list, which follows the settings when nothing is pending.
+ */
+function useExcludedList(saved: string[], settingKey: string) {
+  const { updateSetting } = useSettings();
+  const [excluded, setExcluded] = useState(saved);
+  const pending = useRef(0);
+  useEffect(() => {
+    if (pending.current === 0) setExcluded(saved);
+  }, [saved]);
+
+  const toggle = (item: string) => {
+    const next = excluded.includes(item) ? excluded.filter((c) => c !== item) : [...excluded, item];
+    setExcluded(next);
+    pending.current += 1;
+    updateSetting(settingKey, next)
+      .finally(() => {
+        pending.current -= 1;
+      })
+      // not saved: the list follows the settings again
+      .catch(() => setExcluded(saved));
+  };
+
+  return [excluded, toggle] as const;
+}
+
+const NO_ITEMS: string[] = [];
+
+/**
+ * Custom progressions, typed one per line: saved shortly after typing stops,
+ * with each line read in C (or A minor) below
+ */
+const CustomProgressions: React.FC<{ value: string }> = ({ value }) => {
+  const { updateSetting } = useSettings();
+  const [text, setText] = useState(value);
+  const editing = useRef(false);
+  const timeout = useRef<ReturnType<typeof setTimeout>>();
+
+  // follows the settings when not typing (e.g. reset to defaults)
+  useEffect(() => {
+    if (!editing.current) setText(value);
+  }, [value]);
+
+  useEffect(() => () => clearTimeout(timeout.current), []);
+
+  const onChange = (next: string) => {
+    setText(next);
+    editing.current = true;
+    clearTimeout(timeout.current);
+    timeout.current = setTimeout(() => {
+      updateSetting('chordQuiz.customProgressions', next)
+        .finally(() => {
+          editing.current = false;
+        })
+        .catch(() => {});
+    }, 400);
+  };
+
+  const lines = text.split('\n').filter((line) => line.trim());
+
+  return (
+    <>
+      <textarea
+        className={cx('customProgressions')}
+        value={text}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={'I vi ii V\nI bVII IV I\nii7 V7 Imaj7'}
+        rows={4}
+        spellCheck={false}
+      />
+      {lines.length > 0 && (
+        <ul className={cx('customPreview')}>
+          {lines.map((line, index) => {
+            const { progression, error } = parseProgression(line);
+            const tonic = progression?.mode === 'minor' ? 'A' : 'C';
+            return (
+              // eslint-disable-next-line react/no-array-index-key
+              <li key={index} className={cx({ customError: !progression })}>
+                {progression
+                  ? `${progression.label} → ${getProgressionChords(progression, tonic)
+                      .map((c) => c.name)
+                      .join(' ')} (in ${tonic} ${progression.mode})`
+                  : `"${line.trim()}": "${error}" is not a numeral`}
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </>
+  );
+};
+
 const ChordQuizSettings: React.FC = () => {
   const { settings, updateSetting, resetSettings } = useSettings();
+  const { chords, mode } = settings.chordQuiz;
+  const progressionsMode = mode === 'progressions';
+
+  // a chord or a progression is left out or asked again; the last one stays
+  const [excluded, toggleChord] = useExcludedList(
+    settings.chordQuiz.excludedChords ?? NO_ITEMS,
+    'chordQuiz.excludedChords'
+  );
+  const included = chords !== 'all' ? getIncludedChords(chords, excluded) : [];
+
+  const [excludedProgressions, toggleProgression] = useExcludedList(
+    settings.chordQuiz.excludedProgressions ?? NO_ITEMS,
+    'chordQuiz.excludedProgressions'
+  );
+  // built-in progressions asked (none if all are left out for custom ones)
+  const includedProgressions = PROGRESSIONS.filter((p) => !excludedProgressions.includes(p.id));
+  // custom progressions can replace all the built-in ones
+  const hasCustom = getIncludedProgressions(
+    PROGRESSIONS.map((p) => p.id),
+    settings.chordQuiz.customProgressions
+  ).some((p) => !PROGRESSIONS.includes(p));
 
   return (
     <>
@@ -35,27 +160,127 @@ const ChordQuizSettings: React.FC = () => {
             />
           </FormField>
 
-          <FormField
-            label="Difficulty"
-            hint="An arbitrary complexity score is given to chords, the more intervals and alterations a chord has, the more it is complex."
-          >
-            <Select
-              options={fields.difficulty.choices}
-              onChange={(value: string) => updateSetting('chordQuiz.difficulty', Number(value))}
-              value={`${settings.chordQuiz.difficulty}`}
-            />
-          </FormField>
+          {progressionsMode && (
+            <>
+              <FormField
+                label="Key"
+                hint="Choose the key of the progressions (a minor progression in the current key is played in its relative minor)"
+              >
+                <Select
+                  options={fields.progressionKey.choices}
+                  onChange={(value) => updateSetting('chordQuiz.progressionKey', value)}
+                  value={settings.chordQuiz.progressionKey}
+                />
+              </FormField>
 
-          <div className={cx('chordList')}>
-            {settings.chordQuiz.difficulty > 0 && (
-              <span className={cx('previousLevel')}>Previous level +</span>
-            )}
-            {chordsByComplexity[settings.chordQuiz.difficulty]?.map((chord) => (
-              <span className={cx('chord')} key={chord}>
-                {chord}
-              </span>
-            ))}
-          </div>
+              <FormField label="Progressions" hint="Choose which progressions can be asked">
+                <div className={cx('chordList')}>
+                  {PROGRESSIONS.map((progression) => {
+                    // nothing left at all: every built-in progression is asked
+                    const asked =
+                      includedProgressions.includes(progression) ||
+                      (!includedProgressions.length && !hasCustom);
+                    return (
+                      <button
+                        type="button"
+                        key={progression.id}
+                        className={cx('chord', 'chord--toggle', { 'chord--off': !asked })}
+                        aria-pressed={asked}
+                        disabled={asked && includedProgressions.length === 1 && !hasCustom}
+                        title={`${progression.mode} key`}
+                        onClick={() => toggleProgression(progression.id)}
+                      >
+                        {progression.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </FormField>
+              <div className={cx('chordHint')}>
+                Click a progression to leave it out or ask it again (lowercase: minor chords)
+              </div>
+
+              <FormField
+                label="Custom Progressions"
+                hint="Your own progressions, one per line: numerals separated by spaces or dashes. Uppercase is major, lowercase minor (a lowercase i makes a minor key). Add 7, maj7, m7, dim (°), ø, aug (+), sus2, sus4, 6, 9... b/# borrow a chord (bVII, #iv°), V/V is a secondary dominant."
+              >
+                <CustomProgressions value={settings.chordQuiz.customProgressions ?? ''} />
+              </FormField>
+            </>
+          )}
+
+          {(mode === 'random' ||
+            (progressionsMode && settings.chordQuiz.progressionKey !== 'current')) && (
+            <FormField
+              label="Keys"
+              hint="Choose if chords can be built on sharp or flat notes (C#, Bb...)"
+            >
+              <Select
+                options={fields.tonics.choices}
+                onChange={(value) => updateSetting('chordQuiz.tonics', value)}
+                value={settings.chordQuiz.tonics}
+              />
+            </FormField>
+          )}
+
+          {!progressionsMode && (
+            <FormField label="Chords" hint="Choose which chords can be asked">
+              <Select
+                options={fields.chords.choices}
+                onChange={(value) => updateSetting('chordQuiz.chords', value)}
+                value={settings.chordQuiz.chords}
+              />
+            </FormField>
+          )}
+
+          {!progressionsMode && chords === 'all' && (
+            <>
+              <FormField
+                label="Difficulty"
+                hint="An arbitrary complexity score is given to chords, the more intervals and alterations a chord has, the more it is complex."
+              >
+                <Select
+                  options={fields.difficulty.choices}
+                  onChange={(value: string) => updateSetting('chordQuiz.difficulty', Number(value))}
+                  value={`${settings.chordQuiz.difficulty}`}
+                />
+              </FormField>
+
+              <div className={cx('chordList')}>
+                {settings.chordQuiz.difficulty > 0 && (
+                  <span className={cx('previousLevel')}>Previous level +</span>
+                )}
+                {chordsByComplexity[settings.chordQuiz.difficulty]?.map((chord) => (
+                  <span className={cx('chord')} key={chord}>
+                    {chord}
+                  </span>
+                ))}
+              </div>
+            </>
+          )}
+          {!progressionsMode && chords !== 'all' && (
+            <>
+              <div className={cx('chordList')}>
+                {CHORD_SETS[chords]?.map((chord) => {
+                  const asked = included.includes(chord);
+                  return (
+                    <button
+                      type="button"
+                      key={chord}
+                      className={cx('chord', 'chord--toggle', { 'chord--off': !asked })}
+                      aria-pressed={asked}
+                      disabled={asked && included.length === 1}
+                      title={asked ? 'Leave this chord out' : 'Ask this chord'}
+                      onClick={() => toggleChord(chord)}
+                    >
+                      {CHORD_LABELS[chord] ?? chord}
+                    </button>
+                  );
+                })}
+              </div>
+              <div className={cx('chordHint')}>Click a chord to leave it out or ask it again</div>
+            </>
+          )}
 
           <FormField
             label="Game Length"

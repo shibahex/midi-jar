@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useReducer } from 'react';
+import React, { useCallback, useEffect, useMemo, useReducer, useState } from 'react';
 import classnames from 'classnames/bind';
 import { Note } from 'tonal';
 import { Button } from '@la-jarre-a-son/ui';
@@ -6,7 +6,7 @@ import { Button } from '@la-jarre-a-son/ui';
 import { useSettings } from 'renderer/contexts/Settings';
 import useNoteOn from 'renderer/hooks/useNoteOn';
 import useNotes from 'renderer/hooks/useNotes';
-import { Icon, QuizGameList, QuizReaction, QuizRuns } from 'renderer/components';
+import { Icon, QuizGameList, QuizReaction } from 'renderer/components';
 import {
   formatSharpsFlats,
   getKeySignatureSpelledLike,
@@ -17,7 +17,7 @@ import {
 
 import ScaleQuizSteps from './ScaleQuizSteps';
 import ScaleQuizKeyboard from './ScaleQuizKeyboard';
-import { init, reducer, SCALES_PER_GAME } from './reducer';
+import { init, reducer, SCALES_PER_GAME, State } from './reducer';
 import { getFingers, getHands } from './utils';
 
 import styles from './ScaleQuiz.module.scss';
@@ -77,6 +77,25 @@ const ScaleQuiz: React.FC = () => {
     [quizSettings.displayRelative, scale]
   );
 
+  // a finished scale is announced for a moment, with the scale that follows
+  const [transition, setTransition] = useState<State['transition']>(null);
+  useEffect(() => {
+    if (!state.transition) return undefined;
+    setTransition(state.transition);
+    const timeout = setTimeout(() => setTransition(null), 2600);
+    return () => clearTimeout(timeout);
+  }, [state.transition]);
+
+  // after a clean run, until the next one starts
+  const runs =
+    requiredCleanRuns > 1
+      ? {
+          done: state.cleanRuns,
+          required: requiredCleanRuns,
+          message: state.cleanRuns > 0 && position === 0 ? '✓ Once more!' : null,
+        }
+      : null;
+
   const sequenceLength = useMemo(
     () => getScaleSequence(quizSettings.scales, quizSettings.tonics === 'natural').length,
     [quizSettings.scales, quizSettings.tonics]
@@ -86,12 +105,15 @@ const ScaleQuiz: React.FC = () => {
     <div id="ScaleQuiz" className={cx('base', { 'base--learning': quizSettings.learningMode })}>
       <div className={cx('topContainer')}>
         <div className={cx('reactionContainer')}>
-          {requiredCleanRuns > 1 && (
-            <QuizRuns className={cx('runs')} done={state.cleanRuns} required={requiredCleanRuns} />
-          )}
           {quizSettings.displayReaction && (
             <div className={cx('reaction')}>
               <QuizReaction id="ScaleQuizReaction" gameState={state.feedback} />
+            </div>
+          )}
+          {transition && (
+            <div className={cx('transition')} key={transition.id}>
+              <span className={cx('transitionDone')}>✓ {transition.from} done</span>
+              <span className={cx('transitionNext')}>Next: {transition.to}</span>
             </div>
           )}
         </div>
@@ -140,6 +162,7 @@ const ScaleQuiz: React.FC = () => {
         hands={hands}
         fingers={fingers}
         compact={quizSettings.learningMode}
+        runs={runs}
       />
 
       {quizSettings.learningMode && (

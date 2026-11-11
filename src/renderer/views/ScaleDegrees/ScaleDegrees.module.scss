@@ -164,6 +164,25 @@ $View_ScaleDegrees_textShadow: 0 0.05em 0.1em rgba($color-black, 0.6) !default;
   opacity: 0.75;
 }
 
+/** Learning keyboard **/
+
+// compact, to leave room for the keyboard
+.base--learning {
+  .scaleName {
+    font-size: clamp(18px, min(4.5vh, 3.5vw), 44px);
+    margin-bottom: min(1.5vh, 1vw);
+  }
+
+  .degree {
+    font-size: clamp(36px, min(11vh, 8vw), 110px);
+  }
+
+  .strip {
+    margin-top: min(2vh, 1.5vw);
+    font-size: clamp(16px, min(3vh, 2.2vw), 30px);
+  }
+}
+
 /** Bottom **/
 
 .playedContainer {

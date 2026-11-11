@@ -117,9 +117,43 @@ $View_ScaleQuiz_textShadow: 0 0.05em 0.1em rgba($color-black, 0.6) !default;
   padding: 0 $space-lg;
 }
 
-// direction being played, above the notes
-.direction {
+// a scale was finished: what comes next
+.transition {
+  display: flex;
+  align-items: center;
+  gap: 0.8em;
+  padding: 0.2em 0.9em;
+  border-radius: 1em;
+  background: rgba($color-success-dark, 0.85);
+  border: 2px solid $color-success-normal;
+  font-size: clamp(12px, min(2.4vh, 2vw), 22px);
+  white-space: nowrap;
+  animation: appear 0.3s ease;
+}
+
+.transitionDone {
+  font-weight: bold;
+}
+
+.transitionNext {
+  opacity: 0.9;
+}
+
+// run counter and direction, above the notes
+.stepsHeader {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6em;
   margin-top: min(3vh, 2.5vw);
+
+  + .steps {
+    margin-top: min(1.5vh, 1.2vw);
+  }
+}
+
+.direction {
   padding: 0.1em 0.8em;
   border-radius: 1em;
   border: 2px solid $color-primary-normal;
@@ -132,10 +166,6 @@ $View_ScaleQuiz_textShadow: 0 0.05em 0.1em rgba($color-black, 0.6) !default;
   &--down {
     border-color: $color-warning-normal;
     color: $color-warning-light;
-  }
-
-  + .steps {
-    margin-top: min(1.5vh, 1.2vw);
   }
 }
 
@@ -235,17 +265,12 @@ $View_ScaleQuiz_textShadow: 0 0.05em 0.1em rgba($color-black, 0.6) !default;
     height: min(5vh, 5vw);
   }
 
-  .runs {
-    font-size: clamp(11px, min(2vh, 2vw), 20px);
-    gap: 0.25em;
-  }
-
   .steps,
-  .direction {
+  .stepsHeader {
     margin-top: min(2.5vh, 2vw);
   }
 
-  .direction + .steps {
+  .stepsHeader + .steps {
     margin-top: min(1.5vh, 1.2vw);
   }
 }

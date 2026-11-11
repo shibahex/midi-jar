@@ -54,6 +54,9 @@ export const defaultChordDisplaySettings: ChordDisplaySettings = {
 
 export const defaultChordQuizSettings: ChordQuizSettings = {
   mode: 'random' as const,
+  chords: 'all' as const,
+  excludedChords: [],
+  tonics: 'all' as const,
   difficulty: 0 as const,
   gameLength: 16,
   gamification: true,
@@ -65,6 +68,9 @@ export const defaultChordQuizSettings: ChordQuizSettings = {
   fingering: 'right' as const,
   displayRelative: false,
   retryUntilCorrect: false,
+  progressionKey: 'random' as const,
+  excludedProgressions: [],
+  customProgressions: '',
 };
 
 export const defaultScaleQuizSettings: ScaleQuizSettings = {
@@ -85,6 +91,7 @@ export const defaultScaleQuizSettings: ScaleQuizSettings = {
 
 export const defaultScaleDegreesSettings: ScaleDegreesSettings = {
   mode: 'random' as const,
+  tonics: 'all' as const,
   scales: 'majorMinor' as const,
   gameLength: 8,
   gamification: true,
@@ -92,6 +99,7 @@ export const defaultScaleDegreesSettings: ScaleDegreesSettings = {
   displayScaleNotes: false,
   displayDegreeName: true,
   displayRelative: false,
+  learningMode: false,
 };
 
 export const defaultCircleOfFifthsSettings: CircleOfFifthsSettings = {

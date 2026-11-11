@@ -320,8 +320,19 @@ You can choose which mode (algorithm) to play with:
 
 - `random`: All chords will be picked randomly, in a random key signature
 - `random in key`: All chords will be picked from the current key signature (in Notation settings), in the major scale + additions (melodic and harmonic alterations).
+- `chord progressions`: Common progressions to learn the numbered (Roman numeral) system, played chord by chord in a random key (natural keys only if you like) or the current key. The progression is shown as numerals with the chord names, the current chord highlighted. Click a progression in the settings to leave it out:
+  - Major keys: I–IV–V–I, I–V–vi–IV, I–vi–IV–V, vi–IV–I–V, ii–V–I, ii7–V7–Imaj7
+  - Minor keys: i–iv–v–i, i–iv–V–i, i–VI–III–VII, i–VII–VI–V
+  - Custom: write your own progressions, one per line (e.g. `I vi ii V`, `ii7 V7 Imaj7`, `i bVI bIII bVII`, `I V/V V I`). Uppercase numerals are major chords, lowercase minor, and you can add `7`, `maj7`, `m7`, `dim`, `ø`, `aug`, `sus4`, `9`..., `b`/`#` for borrowed chords and `V/V` for secondary dominants. A preview shows each one in C
 
-And finally, to adapt your training, you can choose the difficulty, each levels adds new chords to the possible list:
+You can also choose which chords are asked:
+
+- `Chords`: Major & minor triads only, Triads (maj, min, dim, aug, sus2, sus4), 7th chords (maj7, m7, 7, m7b5, dim7, mMaj7), 9th chords (maj9, m9, 9, 7b9, 7#9, add9), Triads & 7th chords, or All chords
+- `Keys`: all keys, or natural keys only (no sharp or flat root), in `random` mode
+
+In the settings, click a chord of the list to leave it out (or ask it again): for instance `Triads` with only `maj` and natural keys asks the major triads C, D, E, F, G, A and B.
+
+And finally, with `All chords`, to adapt your training, you can choose the difficulty, each levels adds new chords to the possible list:
 
 - `Very Easy`: maj, min
 - `Easy`: maj7, majadd2, majadd4, maj6, min7, min6, minadd9, minadd4, minmaj7, dom7, sus4, sus2

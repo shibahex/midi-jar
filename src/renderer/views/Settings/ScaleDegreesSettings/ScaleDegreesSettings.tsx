@@ -38,6 +38,19 @@ const ScaleDegreesSettings: React.FC = () => {
             />
           </FormField>
 
+          {settings.scaleDegrees.mode !== 'randomInKey' && (
+            <FormField
+              label="Keys"
+              hint="Choose if tonics can be sharp or flat (C# major, Bb minor...)"
+            >
+              <Select
+                options={fields.tonics.choices}
+                onChange={(value) => updateSetting('scaleDegrees.tonics', value)}
+                value={settings.scaleDegrees.tonics}
+              />
+            </FormField>
+          )}
+
           <FormField label="Game Length" hint="Number of degrees asked for a single scale">
             <Slider
               value={settings.scaleDegrees.gameLength}
@@ -49,6 +62,17 @@ const ScaleDegreesSettings: React.FC = () => {
               valueText={`${settings.scaleDegrees.gameLength}`}
             />
           </FormField>
+
+          <FormControlLabel
+            label="Learning Mode"
+            hint="Displays a piano keyboard with the keys of the scale and their degrees, and the key to play"
+            reverse
+          >
+            <Switch
+              onChange={(value) => updateSetting('scaleDegrees.learningMode', value)}
+              checked={settings.scaleDegrees.learningMode}
+            />
+          </FormControlLabel>
 
           <FormControlLabel
             label="Gamification"
