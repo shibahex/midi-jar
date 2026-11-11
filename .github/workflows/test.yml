@@ -20,13 +20,29 @@ jobs:
       - name: Install Node.js and NPM
         uses: actions/setup-node@v3
         with:
-          node-version: 16
+          node-version: 20
           cache: npm
           registry-url: 'https://npm.pkg.github.com'
           scope: '@la-jarre-a-son'
 
-      - name: Install dependencies
-        run: npm ci
+      - name: Install dependencies (scripts disabled)
+        run: npm ci --ignore-scripts
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # @electron/rebuild and others pull in node-gyp 9, which can't detect Visual Studio 2026.
+      # Force every copy in the dependency tree to node-gyp 12 (CI-only, nothing is committed).
+      - name: Force node-gyp 12 everywhere
+        shell: bash
+        run: |
+          npm pkg set "overrides.node-gyp=^12.2.0"
+          npm install --no-save --ignore-scripts
+          npm ls node-gyp --all || true
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Run postinstall
+        run: npm run postinstall
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
