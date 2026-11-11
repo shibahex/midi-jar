@@ -30,16 +30,6 @@ jobs:
       - name: Checkout git repo
         uses: actions/checkout@v4
 
-      # node-gyp 9 needs distutils, removed in Python 3.12
-      - name: Install Python 3.11
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-
-      - name: Install ALSA headers
-        if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y libasound2-dev
-
       - name: Install Node.js and NPM
         uses: actions/setup-node@v4
         with:
@@ -48,8 +38,17 @@ jobs:
           registry-url: 'https://npm.pkg.github.com'
           scope: '@la-jarre-a-son'
 
+      # Install scripts are skipped: they would compile the MIDI module (@julusian/midi),
+      # which ships ready-made binaries for every system and loads them in Electron.
+      # (electron-builder sets npm_config_build_from_source=false, which the module's
+      # pkg-prebuilds check reads as "build from source")
       - name: Install dependencies
-        run: npm ci
+        shell: bash
+        run: |
+          npm ci --ignore-scripts
+          cd release/app
+          npm ci --ignore-scripts
+          npm run link-modules
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -61,6 +60,6 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           npm run build
-          npx electron-builder ${{ matrix.target }} --publish always \
+          npx electron-builder ${{ matrix.target }} --publish always -c.npmRebuild=false \
             -c.publish.owner=${{ github.repository_owner }} \
             -c.publish.repo=${{ github.event.repository.name }}
