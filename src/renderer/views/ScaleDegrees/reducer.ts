@@ -3,6 +3,13 @@ import { Note } from 'tonal';
 import { STATUSES } from 'renderer/hooks/useQuiz';
 import { ScaleDegreesSettings } from 'main/types';
 import { getRandomScale, isSamePitchClass, ScaleInfo } from 'renderer/helpers';
+import {
+  addScore,
+  NO_FEEDBACK,
+  QuizFeedback,
+  ScoreGame,
+  startNewGame,
+} from 'renderer/helpers/quiz';
 
 /** Wrong attempts before the answer is revealed */
 export const REVEAL_AFTER_MISTAKES = 2;
@@ -13,7 +20,7 @@ const SCORE_SPEED_MAX = 400; // bonus when answering instantly, decreasing to 0 
 const SCORE_STREAK = 20; // bonus per correct answer in a row
 const FAST_ANSWER_MS = 1500;
 
-export type Feedback = { index: number; status: STATUSES; score: number };
+export type Feedback = QuizFeedback;
 
 export type State = {
   options: ScaleDegreesSettings;
@@ -26,7 +33,7 @@ export type State = {
   found: number[];
   streak: number;
   bestStreak: number;
-  games: { score: number }[];
+  games: ScoreGame[];
   feedback: Feedback;
   eventCount: number;
   lastPlayed: { note: string; correct: boolean; id: number } | null;
@@ -73,7 +80,7 @@ export function init({
     streak: 0,
     bestStreak: 0,
     games: [{ score: 0 }],
-    feedback: { index: -1, status: STATUSES.none, score: 0 },
+    feedback: NO_FEEDBACK,
     eventCount: 0,
     lastPlayed: null,
     lastAnswerMs: null,
@@ -89,13 +96,6 @@ export type Action =
       time: number;
     }
   | { type: 'SKIP'; time: number };
-
-const addScore = (games: State['games'], points: number) => {
-  const next = [...games];
-  const last = next[next.length - 1];
-  next[next.length - 1] = { ...last, score: last.score + points };
-  return next;
-};
 
 export function reducer(state: State, action: Action): State {
   switch (action.type) {
@@ -113,10 +113,7 @@ export function reducer(state: State, action: Action): State {
 
       return {
         ...init({ options, key, time: action.time }),
-        // start a fresh game entry unless the current one is still untouched
-        games: state.games[state.games.length - 1].score
-          ? [...state.games, { score: 0 }]
-          : state.games,
+        games: startNewGame(state.games),
         bestStreak: state.bestStreak,
       };
     }
@@ -125,7 +122,7 @@ export function reducer(state: State, action: Action): State {
       return {
         ...state,
         ...newScale(state.options, state.key, state.scale),
-        games: [...state.games, { score: 0 }],
+        games: startNewGame(state.games),
         askedAt: action.time,
         mistakes: 0,
         streak: 0,

@@ -93,6 +93,17 @@ const ScaleDegreesSettings: React.FC = () => {
               checked={settings.scaleDegrees.displayDegreeName}
             />
           </FormControlLabel>
+
+          <FormControlLabel
+            label="Display Relative Scale"
+            hint="Displays the relative scale under the scale name (A Natural Minor for C Major, C Major for D Dorian...)"
+            reverse
+          >
+            <Switch
+              onChange={(value) => updateSetting('scaleDegrees.displayRelative', value)}
+              checked={settings.scaleDegrees.displayRelative}
+            />
+          </FormControlLabel>
         </Container>
       </ScrollContainer>
       <Toolbar elevation={2} placement="bottom">

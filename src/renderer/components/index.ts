@@ -19,3 +19,6 @@ export * from './PianoKeyboard';
 export * from './MidiLearn';
 export * from './QuizGameList';
 export * from './QuizReaction';
+export * from './QuizRuns';
+export * from './FingerBadges';
+export * from './LearningKeyboard';

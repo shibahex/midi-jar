@@ -5,6 +5,9 @@ import { useSettings } from 'renderer/contexts/Settings';
 import useQuiz, { STATUSES, Game } from 'renderer/hooks/useQuiz';
 import useNotes from 'renderer/hooks/useNotes';
 import { ChordIntervals, ChordName, QuizGameList, QuizReaction } from 'renderer/components';
+import { getChordRelativeKey } from 'renderer/helpers';
+
+import ChordQuizKeyboard from './ChordQuizKeyboard';
 
 import styles from './ChordQuiz.module.scss';
 
@@ -16,7 +19,7 @@ const ChordQuiz: React.FC = () => {
   const quizSettings = settings.chordQuiz;
   const notationSettings = settings.notation;
 
-  const { chords, pitchClasses } = useNotes();
+  const { chords, pitchClasses, playedMidiNotes, sustainedMidiNotes, midiNotes } = useNotes();
 
   const { games, gameState } = useQuiz(pitchClasses, chords, quizSettings, notationSettings);
 
@@ -64,6 +67,12 @@ const ChordQuiz: React.FC = () => {
     [games, gameState.index, gameState.gameIndex]
   );
 
+  const target = games[gameState.gameIndex]?.chords[gameState.index];
+  const relativeKey = useMemo(
+    () => (target ? getChordRelativeKey(target.tonic, target.quality) : null),
+    [target]
+  );
+
   if (!settings) return null;
 
   if (!games.length)
@@ -74,11 +83,11 @@ const ChordQuiz: React.FC = () => {
     );
 
   return (
-    <div id="ChordQuiz" className={cx('base')}>
+    <div id="ChordQuiz" className={cx('base', { 'base--learning': quizSettings.learningMode })}>
       <div className={cx('topContainer')}>
         {quizSettings.displayReaction && (
           <div className={cx('reactionContainer')}>
-            <QuizReaction gameState={gameState} />
+            <QuizReaction id="ChordQuizReaction" gameState={gameState} />
           </div>
         )}
         {quizSettings.gamification && (
@@ -105,6 +114,9 @@ const ChordQuiz: React.FC = () => {
           {games[gameState.gameIndex].chords[gameState.index].name}
         </div>
       )}
+      {quizSettings.displayRelative && relativeKey && (
+        <div className={cx('relativeKey')}>Relative key: {relativeKey}</div>
+      )}
       {quizSettings.displayIntervals && (
         <div className={cx('intervalsContainer')}>
           <ChordIntervals
@@ -115,6 +127,17 @@ const ChordQuiz: React.FC = () => {
             quizMode
           />
         </div>
+      )}
+      {quizSettings.learningMode && (
+        <ChordQuizKeyboard
+          target={games[gameState.gameIndex].chords[gameState.index]}
+          keyName={notationSettings.key}
+          sharps={notationSettings.accidentals === 'sharp'}
+          fingering={quizSettings.fingering}
+          playedMidiNotes={playedMidiNotes}
+          sustainedMidiNotes={sustainedMidiNotes}
+          midiNotes={midiNotes}
+        />
       )}
       <div className={cx('playedContainer')}>
         <div className={cx('progress')}>

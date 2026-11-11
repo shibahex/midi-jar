@@ -248,10 +248,26 @@
                 "displayReaction": {
                     "type": "boolean"
                 },
+                "displayRelative": {
+                    "type": "boolean"
+                },
+                "fingering": {
+                    "description": "Hands to display finger numbers for, in learning modes",
+                    "enum": [
+                        "both",
+                        "left",
+                        "none",
+                        "right"
+                    ],
+                    "type": "string"
+                },
                 "gameLength": {
                     "type": "number"
                 },
                 "gamification": {
+                    "type": "boolean"
+                },
+                "learningMode": {
                     "type": "boolean"
                 },
                 "mode": {
@@ -358,6 +374,9 @@
                 "displayReaction": {
                     "type": "boolean"
                 },
+                "displayRelative": {
+                    "type": "boolean"
+                },
                 "displayScaleNotes": {
                     "type": "boolean"
                 },
@@ -408,7 +427,11 @@
                 "displayReaction": {
                     "type": "boolean"
                 },
+                "displayRelative": {
+                    "type": "boolean"
+                },
                 "fingering": {
+                    "description": "Hands to display finger numbers for, in learning modes",
                     "enum": [
                         "both",
                         "left",

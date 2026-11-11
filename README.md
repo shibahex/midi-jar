@@ -44,6 +44,7 @@ MIDI Jar includes:
 - A Circle of Fifths highly customizatble
 - A Chord Quiz module, with different modes and settings to train
 - A Scale Quiz module, to learn scales with a keyboard and fingering
+- A Learning Mode for both quizzes, showing the keys to play and the fingering
 - A HTTP/Websocket server to include modules externally (in OBS Browser source for instance)
 - Running at startup
 - Running in background (no window, only Tray icon)
@@ -329,7 +330,13 @@ And finally, to adapt your training, you can choose the difficulty, each levels 
 - `Very Hard`: maj6/9add#11, maj9b5, maj9#9, majb9#9, maj#11b9, maj11#9, maj13#11, min9#5, min11#5, min13#5, min11b11, minmaj9addb13, minmaj11addb13, minmaj9#11, minmaj11b11, min9b5, min7b5b9, min11b5, dom9b5, dom11b5, dom13b5, dom9#11, dom9addb13, dom7b9#9, dom7b9#11, dom7b9b13, dom11b13, dom13#9, dom13#11, dom11susb2, dom7sus4addb13, aug9, aug11, aug13, augmaj9, augadd#9, augmaj7b9, aug7b9, augsus4add7
 - `All Chords`: the rest of the dictionary
 
-If the game mode is too annoying, you can turn off the scoring, the reactions, and choose to display or not the asked intervals, but have in mind that the gamification is only for fun, there is no persistent scoreboard or high score, it's only a tool to help exploration.
+### Learning Mode
+
+Turn on `Learning Mode` to display a piano keyboard with the keys of the chord to play, and the finger numbers for the right hand, the left hand or both (1 is the thumb, 5 is the pinky). The keyboard follows the octave you play in, and any inversion of the chord is accepted.
+
+![MIDI Jar Chord Quiz Learning Mode](assets/midi-jar-chord-quiz-learning.png)
+
+If the game mode is too annoying, you can turn off the scoring, the reactions, and choose to display or not the asked intervals and the relative key (A minor for C, C major for Am), but have in mind that the gamification is only for fun, there is no persistent scoreboard or high score, it's only a tool to help exploration.
 
 Hopefully in the future, this module will be able to have an "Intelligent" mode capable of generating random chord progressions with key changes.
 
@@ -354,10 +361,12 @@ You can choose which scales are asked:
 And how you practice them:
 
 - `Repeat until perfect`: the same scale is asked again until you play it 1, 2 or 3 times in a row without a mistake
-- `Jump back`: playing a note you already played (like the tonic) continues from that note instead of counting as a mistake
+- `Jump back`: playing a note you already played in the same direction (like the tonic) continues from that note instead of counting as a mistake
 - `Learning Mode`: displays a piano keyboard with the notes of the scale, the next key to play, and the fingering for the right hand, the left hand or both (standard fingerings for major and minor scales, computed for the other scales)
 
-Like the Chord Quiz, the scoring and reactions can be turned off, and you can display the note names and the formula (degrees) of the scale.
+![MIDI Jar Scale Quiz Learning Mode](assets/midi-jar-scale-quiz-learning.png)
+
+Like the Chord Quiz, the scoring and reactions can be turned off, and you can display the note names, the formula (degrees) of the scale, and its relative scale (A Natural Minor for C Major, C Major for D Dorian).
 
 
 ## What then ?

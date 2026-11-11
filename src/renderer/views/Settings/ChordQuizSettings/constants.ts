@@ -1,6 +1,11 @@
 import { getDictionaryChordsByComplexity } from 'renderer/hooks/useQuiz';
 
+import { fingeringChoices } from '../fields';
+
 export const fields = {
+  fingering: {
+    choices: fingeringChoices,
+  },
   mode: {
     choices: [
       {

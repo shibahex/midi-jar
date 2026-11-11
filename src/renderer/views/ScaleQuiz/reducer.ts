@@ -2,7 +2,14 @@ import { Interval, Note } from 'tonal';
 
 import { STATUSES } from 'renderer/hooks/useQuiz';
 import { ScaleQuizSettings } from 'main/types';
-import { getRandomScale, getScaleInSequence, isSamePitchClass, ScaleInfo } from 'renderer/helpers';
+import {
+  clampOctaveShift,
+  getRandomScale,
+  getScaleInSequence,
+  isSamePitchClass,
+  ScaleInfo,
+} from 'renderer/helpers';
+import { addScore, NO_FEEDBACK, QuizFeedback, ScoreGame } from 'renderer/helpers/quiz';
 
 /** Wrong attempts on the same note before its name is revealed */
 export const HINT_AFTER_MISTAKES = 2;
@@ -26,13 +33,8 @@ export type Step = {
   upIndex: number;
 };
 
-export type Feedback = {
-  index: number;
-  status: STATUSES;
-  score: number;
-};
-
-export type Game = { score: number };
+export type Feedback = QuizFeedback;
+export type Game = ScoreGame;
 
 export type State = {
   options: ScaleQuizSettings;
@@ -49,11 +51,34 @@ export type State = {
   /** no mistakes or jumps since the current run started */
   runClean: boolean;
   lastPlayed: { note: string; correct: boolean; back?: boolean; id: number } | null;
+  /** last note accepted, kept across scales: striking it again (other hand, other octave) is ignored */
+  lastAccepted: string | null;
   feedback: Feedback;
   eventCount: number;
   completed: number;
   games: Game[];
   perfectStreak: number;
+  /** furthest step reached in the current run: going back does not score these steps again */
+  bestPosition: number;
+  /** keys accepted and still held, shown as correct on the learning keyboard */
+  acceptedMidi: number[];
+  /** octaves between the played keys and the learning keyboard default octave */
+  octaveShift: number;
+};
+
+/**
+ * Octaves between the played key and the key displayed for the same step
+ */
+export const getOctaveShift = (step: Step, midi: number) =>
+  clampOctaveShift(Math.round((midi - step.midi) / 12));
+
+/**
+ * First step of the direction being played: the top of the scale once going down
+ * in "up and back down", the first step otherwise
+ */
+const getDirectionStart = (steps: Step[], position: number) => {
+  const top = steps.reduce((best, step, i) => (step.midi > steps[best].midi ? i : best), 0);
+  return position > top ? top : 0;
 };
 
 export function buildSteps(scale: ScaleInfo, direction: ScaleQuizSettings['direction']): Step[] {
@@ -108,25 +133,24 @@ export function init({ options, key }: { options: ScaleQuizSettings; key: string
     cleanRuns: 0,
     runClean: true,
     lastPlayed: null,
-    feedback: { index: -1, status: STATUSES.none, score: 0 },
+    lastAccepted: null,
+    feedback: NO_FEEDBACK,
     eventCount: 0,
     completed: 0,
     games: [{ score: 0 }],
     perfectStreak: 0,
+    bestPosition: 0,
+    acceptedMidi: [],
+    octaveShift: 0,
   };
 }
 
 export type Action =
   | { type: 'NOTE_ON'; midi: number; noteName: string }
   | { type: 'OPTIONS_CHANGED'; options: ScaleQuizSettings; key: string }
-  | { type: 'SKIP' };
-
-const addScore = (games: Game[], points: number) => {
-  const next = [...games];
-  const last = next[next.length - 1];
-  next[next.length - 1] = { ...last, score: last.score + points };
-  return next;
-};
+  | { type: 'SKIP' }
+  /** keys currently held: released keys are no longer shown as accepted */
+  | { type: 'NOTES_HELD'; midi: number[] };
 
 export function reducer(state: State, action: Action): State {
   switch (action.type) {
@@ -148,6 +172,7 @@ export function reducer(state: State, action: Action): State {
         ...init({ options, key }),
         games: state.games,
         completed: state.completed,
+        octaveShift: state.octaveShift,
       };
     }
 
@@ -161,7 +186,13 @@ export function reducer(state: State, action: Action): State {
         cleanRuns: 0,
         runClean: true,
         perfectStreak: 0,
+        bestPosition: 0,
       };
+
+    case 'NOTES_HELD': {
+      const acceptedMidi = state.acceptedMidi.filter((m) => action.midi.includes(m));
+      return acceptedMidi.length === state.acceptedMidi.length ? state : { ...state, acceptedMidi };
+    }
 
     case 'NOTE_ON': {
       const step = state.steps[state.position];
@@ -169,31 +200,39 @@ export function reducer(state: State, action: Action): State {
       const eventCount = state.eventCount + 1;
       const played = correct ? step.note : Note.pitchClass(action.noteName);
       const lastPlayed = { note: played, correct, id: eventCount };
+      const acceptedMidi = [...state.acceptedMidi, action.midi];
+
+      // Re-striking the note just played (other hand, other octave, double trigger): not a mistake,
+      // even when that note ended the previous scale
+      if (!correct && state.lastAccepted && isSamePitchClass(action.midi, state.lastAccepted)) {
+        return { ...state, acceptedMidi };
+      }
 
       if (!correct && state.options.jumpBack) {
-        // Find the closest earlier step with this note and continue from there
+        // Find the closest earlier step with this note, in the direction being played
+        // (a wrong note on the way down does not go back to the way up)
+        const start = getDirectionStart(state.steps, state.position);
         let back = -1;
-        for (let i = state.position - 1; i >= 0; i -= 1) {
+        for (let i = state.position - 1; i >= start; i -= 1) {
           if (isSamePitchClass(action.midi, state.steps[i].note)) {
             back = i;
             break;
           }
         }
 
-        // Re-striking the note just played: ignore it
-        if (back !== -1 && back === state.position - 1) {
-          return state;
-        }
-
         if (back !== -1) {
           return {
             ...state,
             eventCount,
+            acceptedMidi,
+            octaveShift: getOctaveShift(state.steps[back], action.midi),
             lastPlayed: { note: state.steps[back].note, correct: true, back: true, id: eventCount },
+            lastAccepted: state.steps[back].note,
             position: back + 1,
             positionMistakes: 0,
-            // going back to the very first note starts a fresh run
+            // going back to the very first note starts a fresh run, anywhere else breaks the streak
             runClean: back === 0,
+            cleanRuns: back === 0 ? state.cleanRuns : 0,
           };
         }
       }
@@ -205,7 +244,9 @@ export function reducer(state: State, action: Action): State {
           lastPlayed,
           mistakes: state.mistakes + 1,
           positionMistakes: state.positionMistakes + 1,
+          // a mistake breaks the streak right away
           runClean: false,
+          cleanRuns: 0,
           perfectStreak: 0,
           games: addScore(state.games, SCORE_WRONG),
           feedback: {
@@ -217,6 +258,10 @@ export function reducer(state: State, action: Action): State {
       }
 
       const position = state.position + 1;
+      // steps already scored in this run (before jumping back) give no points
+      const notePoints = position > state.bestPosition ? SCORE_NOTE : 0;
+      const bestPosition = Math.max(position, state.bestPosition);
+      const octaveShift = getOctaveShift(step, action.midi);
 
       // Scale not finished yet
       if (position < state.steps.length) {
@@ -224,9 +269,13 @@ export function reducer(state: State, action: Action): State {
           ...state,
           eventCount,
           lastPlayed,
+          lastAccepted: step.note,
+          acceptedMidi,
+          octaveShift,
           position,
+          bestPosition,
           positionMistakes: 0,
-          games: addScore(state.games, SCORE_NOTE),
+          games: addScore(state.games, notePoints),
         };
       }
 
@@ -239,7 +288,11 @@ export function reducer(state: State, action: Action): State {
           ...state,
           eventCount,
           lastPlayed,
+          lastAccepted: step.note,
+          acceptedMidi,
+          octaveShift,
           position: 0,
+          bestPosition: 0,
           positionMistakes: 0,
           cleanRuns,
           runClean: true,
@@ -267,7 +320,11 @@ export function reducer(state: State, action: Action): State {
         ...newScale(state.options, state.key, state.scale, state.sequenceIndex + 1),
         eventCount,
         lastPlayed,
+        lastAccepted: step.note,
+        acceptedMidi,
+        octaveShift,
         position: 0,
+        bestPosition: 0,
         mistakes: 0,
         positionMistakes: 0,
         cleanRuns: 0,

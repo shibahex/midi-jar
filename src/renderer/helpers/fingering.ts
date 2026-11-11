@@ -3,7 +3,21 @@
  * Fingers: 1 = thumb … 5 = little finger. Descending uses the same finger per note.
  */
 
+import { Fingering } from 'main/types';
+
 export type Hand = 'right' | 'left';
+
+export const HAND_LABEL: Record<Hand, string> = { right: 'Right hand', left: 'Left hand' };
+
+export const FINGER_NAMES = ['', 'thumb', 'index', 'middle', 'ring', 'pinky'];
+
+/** Hands to show finger numbers for */
+export const getFingeringHands = (fingering: Fingering | undefined): Hand[] => {
+  if (!fingering) return ['right'];
+  if (fingering === 'none') return [];
+  if (fingering === 'both') return ['right', 'left'];
+  return [fingering];
+};
 
 const BLACK_CHROMAS = [1, 3, 6, 8, 10];
 
@@ -174,4 +188,41 @@ export function getScaleFingering(type: string, midis: number[], hand: Hand): nu
   }
 
   return hand === 'right' ? computeRightHandFingering(midis) : computeLeftHandFingering(midis);
+}
+
+/** Right hand fingers for chord notes counted from the lowest note */
+const rightChordFingers = (midis: number[]): number[] => {
+  const n = midis.length;
+  const span = midis[n - 1] - midis[0];
+
+  if (n === 1) return [1];
+  if (n === 2) return [1, span <= 4 ? 3 : 5];
+  if (n === 3) {
+    if (span <= 5) return [1, 2, 3];
+    const second = midis[1] - midis[0];
+    // sus2 → 2, sus4 → 4, thirds → 3
+    let middle = 3;
+    if (second <= 2) middle = 2;
+    else if (second >= 5) middle = 4;
+    return [1, middle, 5];
+  }
+  if (n === 4) return [1, 2, 3, 5];
+  if (n === 5) return [1, 2, 3, 4, 5];
+
+  // too many notes for one hand: spread the fingers over the keys
+  return midis.map((_, i) => 1 + Math.round((i * 4) / (n - 1)));
+};
+
+/**
+ * Fingering for the notes of a chord (midis ascending), e.g. 1-3-5 for a right hand triad
+ * and 5-3-1 for a left hand triad
+ */
+export function getChordFingering(midis: number[], hand: Hand): number[] {
+  const sorted = [...midis].sort((a, b) => a - b);
+  if (sorted.length === 0) return [];
+  if (hand === 'right') return rightChordFingers(sorted);
+
+  // left hand mirrors the right hand: thumb on the top note
+  const mirrored = sorted.map((m) => -m).reverse();
+  return rightChordFingers(mirrored).reverse();
 }

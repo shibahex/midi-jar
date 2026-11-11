@@ -1,3 +1,5 @@
+import { fingeringChoices } from '../fields';
+
 export const fields = {
   mode: {
     choices: [
@@ -7,7 +9,7 @@ export const fields = {
       },
       {
         value: 'randomInKey',
-        label: 'Tonic of the current Key',
+        label: 'Scales of the current Key',
       },
     ],
   },
@@ -23,7 +25,7 @@ export const fields = {
       },
       {
         value: 'randomInKey',
-        label: 'Tonic of the current Key',
+        label: 'Scales of the current Key',
       },
     ],
   },
@@ -108,23 +110,6 @@ export const fields = {
     ],
   },
   fingering: {
-    choices: [
-      {
-        value: 'right',
-        label: 'Right hand',
-      },
-      {
-        value: 'left',
-        label: 'Left hand',
-      },
-      {
-        value: 'both',
-        label: 'Both hands',
-      },
-      {
-        value: 'none',
-        label: 'None',
-      },
-    ],
+    choices: fingeringChoices,
   },
 };

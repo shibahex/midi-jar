@@ -45,7 +45,7 @@ const ScaleQuizSettings: React.FC = () => {
               <Select
                 options={fields.tonics.choices}
                 onChange={(value) => updateSetting('scaleQuiz.tonics', value)}
-                value={settings.scaleQuiz.tonics ?? 'all'}
+                value={settings.scaleQuiz.tonics}
               />
             </FormField>
           )}
@@ -144,6 +144,17 @@ const ScaleQuizSettings: React.FC = () => {
             <Switch
               onChange={(value) => updateSetting('scaleQuiz.displayFormula', value)}
               checked={settings.scaleQuiz.displayFormula}
+            />
+          </FormControlLabel>
+
+          <FormControlLabel
+            label="Display Relative Scale"
+            hint="Displays the relative scale under the scale name (A Natural Minor for C Major, C Major for D Dorian...)"
+            reverse
+          >
+            <Switch
+              onChange={(value) => updateSetting('scaleQuiz.displayRelative', value)}
+              checked={settings.scaleQuiz.displayRelative}
             />
           </FormControlLabel>
         </Container>

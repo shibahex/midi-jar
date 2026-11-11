@@ -155,6 +155,11 @@ $View_ChordQuiz_textShadow: 0 0.05em 0.1em rgba($color-black, 0.6) !default;
   font-size: min(3vh, 3vw);
 }
 
+.relativeKey {
+  font-size: min(2.5vh, 2.5vw);
+  opacity: 0.8;
+}
+
 /** Played Section **/
 
 .score {
@@ -174,3 +179,16 @@ $View_ChordQuiz_textShadow: 0 0.05em 0.1em rgba($color-black, 0.6) !default;
   justify-content: center;
   text-shadow: $View_ChordQuiz_textShadow;
 }
+
+/** Learning keyboard **/
+
+.base--learning {
+  .chordContainer {
+    height: min(14vw, 30vh);
+  }
+
+  .targetChord {
+    font-size: min(14vh, 8vw);
+  }
+}
+

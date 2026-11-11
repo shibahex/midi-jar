@@ -84,6 +84,14 @@ $View_ScaleDegrees_textShadow: 0 0.05em 0.1em rgba($color-black, 0.6) !default;
   animation: appear 0.35s ease;
 }
 
+.relative {
+  margin-top: calc(-1 * min(2vh, 1.5vw));
+  margin-bottom: min(3vh, 2vw);
+  font-size: clamp(13px, min(3vh, 2.5vw), 28px);
+  opacity: 0.8;
+  animation: appear 0.35s ease;
+}
+
 .question {
   display: flex;
   flex-direction: column;

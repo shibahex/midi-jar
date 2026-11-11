@@ -65,8 +65,18 @@ $View_ScaleQuiz_textShadow: 0 0.05em 0.1em rgba($color-black, 0.6) !default;
   position: absolute;
   inset: 0;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
+  gap: min(1.5vh, 1.5vw);
+}
+
+// keeps the run counter still while reactions come and go
+.reaction {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: min(7vh, 7vw);
 }
 
 .skip {
@@ -90,6 +100,13 @@ $View_ScaleQuiz_textShadow: 0 0.05em 0.1em rgba($color-black, 0.6) !default;
   font-weight: bold;
   line-height: 1.1;
   text-shadow: $View_ScaleQuiz_textShadow;
+  animation: appear 0.35s ease;
+}
+
+.relative {
+  margin-top: 0.25em;
+  font-size: clamp(14px, min(3.5vh, 2.8vw), 32px);
+  opacity: 0.8;
   animation: appear 0.35s ease;
 }
 
@@ -181,72 +198,6 @@ $View_ScaleQuiz_textShadow: 0 0.05em 0.1em rgba($color-black, 0.6) !default;
 
   .steps {
     margin-top: min(2.5vh, 2vw);
-  }
-}
-
-.learn {
-  // keyboard height follows its width
-  width: min(100%, 900px, 85vh);
-  margin-top: min(3vh, 2vw);
-  padding: 0 $space-lg;
-}
-
-.keyboardContainer {
-  position: relative;
-}
-
-.keyboard {
-  width: 100%;
-}
-
-.nextFinger {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  align-items: baseline;
-  gap: 0.3em 1em;
-  margin-top: 0.6em;
-  font-size: clamp(13px, min(2.2vh, 2vw), 20px);
-}
-
-.nextHand {
-  padding: 0.1em 0.6em;
-  border-radius: 1em;
-  border: 2px solid;
-
-  &--right {
-    border-color: $color-primary-normal;
-  }
-
-  &--left {
-    border-color: $color-warning-normal;
-  }
-}
-
-.legend {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  gap: 0.4em;
-  margin-top: 0.5em;
-  font-size: clamp(11px, min(1.8vh, 1.6vw), 16px);
-  opacity: 0.7;
-}
-
-.legendColor {
-  display: inline-block;
-  width: 1em;
-  height: 1em;
-  border-radius: 2px;
-  border: 1px solid $color-neutral-dark;
-
-  &--next {
-    background: $color-primary-normal;
-  }
-
-  &--scale {
-    margin-left: 1em;
-    background: $color-neutral-lighter;
   }
 }
 

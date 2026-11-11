@@ -61,6 +61,9 @@ export const defaultChordQuizSettings: ChordQuizSettings = {
   displayName: true,
   displayReaction: true,
   displayIntervals: true,
+  learningMode: false,
+  fingering: 'right' as const,
+  displayRelative: false,
 };
 
 export const defaultScaleQuizSettings: ScaleQuizSettings = {
@@ -76,6 +79,7 @@ export const defaultScaleQuizSettings: ScaleQuizSettings = {
   displayReaction: true,
   displayNoteNames: false,
   displayFormula: true,
+  displayRelative: false,
 };
 
 export const defaultScaleDegreesSettings: ScaleDegreesSettings = {
@@ -86,6 +90,7 @@ export const defaultScaleDegreesSettings: ScaleDegreesSettings = {
   displayReaction: true,
   displayScaleNotes: false,
   displayDegreeName: true,
+  displayRelative: false,
 };
 
 export const defaultCircleOfFifthsSettings: CircleOfFifthsSettings = {

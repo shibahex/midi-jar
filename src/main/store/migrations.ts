@@ -20,6 +20,7 @@ import {
   v1_7_0_ChordDisplaySettings,
   v1_7_0_Settings,
 } from './legacy-types';
+import { Settings } from '../types/Settings';
 
 const migrations: Migrations<StoreType> = {
   '1.0.0': (store: Conf<StoreType>) => {
@@ -342,6 +343,53 @@ const migrations: Migrations<StoreType> = {
         defaultNotation: 'short',
         disabled: [],
         aliases: [['maj', '']],
+      },
+    };
+
+    store.set('settings', newSettings);
+  },
+  '1.8.0': (store: Conf<StoreType>) => {
+    store.set('version', '1.8.0');
+
+    // dev builds may have saved part of the new settings: keep what is there
+    const settings = store.get('settings') as unknown as v1_7_0_Settings &
+      Partial<Pick<Settings, 'scaleQuiz' | 'scaleDegrees'>>;
+
+    const newSettings: Settings = {
+      ...settings,
+      server: settings.server ?? { enabled: true, port: 25011 },
+      chordQuiz: {
+        learningMode: false,
+        fingering: 'right',
+        displayRelative: false,
+        ...settings.chordQuiz,
+      },
+      scaleQuiz: {
+        mode: 'random',
+        tonics: 'all',
+        scales: 'majorMinor',
+        direction: 'up',
+        requiredCleanRuns: 0,
+        jumpBack: true,
+        learningMode: false,
+        fingering: 'right',
+        gamification: true,
+        displayReaction: true,
+        displayNoteNames: false,
+        displayFormula: true,
+        displayRelative: false,
+        ...settings.scaleQuiz,
+      },
+      scaleDegrees: {
+        mode: 'random',
+        scales: 'majorMinor',
+        gameLength: 8,
+        gamification: true,
+        displayReaction: true,
+        displayScaleNotes: false,
+        displayDegreeName: true,
+        displayRelative: false,
+        ...settings.scaleDegrees,
       },
     };
 

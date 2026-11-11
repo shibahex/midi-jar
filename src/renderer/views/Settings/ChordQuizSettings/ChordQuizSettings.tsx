@@ -73,6 +73,27 @@ const ChordQuizSettings: React.FC = () => {
           </FormField>
 
           <FormControlLabel
+            label="Learning Mode"
+            hint="Displays a piano keyboard with the keys of the chord to play"
+            reverse
+          >
+            <Switch
+              onChange={(value) => updateSetting('chordQuiz.learningMode', value)}
+              checked={settings.chordQuiz.learningMode}
+            />
+          </FormControlLabel>
+
+          {settings.chordQuiz.learningMode && (
+            <FormField label="Fingering" hint="Displays finger numbers (1 is thumb, 5 is pinky)">
+              <Select
+                options={fields.fingering.choices}
+                onChange={(value) => updateSetting('chordQuiz.fingering', value)}
+                value={settings.chordQuiz.fingering}
+              />
+            </FormField>
+          )}
+
+          <FormControlLabel
             label="Gamification"
             hint="Gamifies the quiz by adding scores and game count (no persistence of scoreboard)"
             reverse
@@ -125,6 +146,17 @@ const ChordQuizSettings: React.FC = () => {
             <Switch
               onChange={(value) => updateSetting('chordQuiz.displayIntervals', value)}
               checked={settings.chordQuiz.displayIntervals}
+            />
+          </FormControlLabel>
+
+          <FormControlLabel
+            label="Display Relative Key"
+            hint="Displays the relative key of major and minor chords (A minor for C, C major for Am)"
+            reverse
+          >
+            <Switch
+              onChange={(value) => updateSetting('chordQuiz.displayRelative', value)}
+              checked={settings.chordQuiz.displayRelative}
             />
           </FormControlLabel>
         </Container>

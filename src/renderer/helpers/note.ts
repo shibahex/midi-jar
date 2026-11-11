@@ -70,3 +70,21 @@ export const getNoteInKeySignature = (note: string, keySignatureNotes?: string[]
 
 export const formatSharpsFlats = (str: string) =>
   str ? str.replace(REGEX_FLAT, FLAT).replace(REGEX_SHARP, SHARP) : str;
+
+/**
+ * Key signature whose note names follow the spelling of some notes (a scale, a chord),
+ * so that keys are named like the notes to play (A# rather than Bb in F# major)
+ */
+export const getKeySignatureSpelledLike = (
+  key: string,
+  useSharps: boolean,
+  spelling: string[]
+): KeySignatureConfig => {
+  const keySig = getKeySignature(key, useSharps);
+  const notes = [...keySig.notes];
+  spelling.forEach((note) => {
+    const chroma = Note.chroma(note);
+    if (chroma !== undefined) notes[chroma] = note;
+  });
+  return { ...keySig, notes };
+};

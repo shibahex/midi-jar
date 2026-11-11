@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useReducer, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useReducer } from 'react';
 import classnames from 'classnames/bind';
 import { Note } from 'tonal';
 import { Button } from '@la-jarre-a-son/ui';
@@ -6,18 +6,19 @@ import { Button } from '@la-jarre-a-son/ui';
 import { useSettings } from 'renderer/contexts/Settings';
 import useNoteOn from 'renderer/hooks/useNoteOn';
 import useNotes from 'renderer/hooks/useNotes';
-import { Icon, QuizGameList, QuizReaction } from 'renderer/components';
+import { Icon, QuizGameList, QuizReaction, QuizRuns } from 'renderer/components';
 import {
   formatSharpsFlats,
-  getKeySignature,
+  getKeySignatureSpelledLike,
   getNoteInKeySignature,
+  getRelativeScale,
   getScaleSequence,
 } from 'renderer/helpers';
 
 import ScaleQuizSteps from './ScaleQuizSteps';
 import ScaleQuizKeyboard from './ScaleQuizKeyboard';
 import { init, reducer, SCALES_PER_GAME } from './reducer';
-import { getFingers, getHands, getOctaveShift, getPlayedStep } from './utils';
+import { getFingers, getHands } from './utils';
 
 import styles from './ScaleQuiz.module.scss';
 
@@ -44,47 +45,37 @@ const ScaleQuiz: React.FC = () => {
   const { playedMidiNotes, sustainedMidiNotes, midiNotes } = useNotes({ key, accidentals });
 
   // key signature spelled like the scale, so that note names match
-  const keySignature = useMemo(() => {
-    const keySig = getKeySignature(key, accidentals === 'sharp');
-    const notes = [...keySig.notes];
-    scale.notes.forEach((note) => {
-      const chroma = Note.chroma(note);
-      if (chroma !== undefined) notes[chroma] = note;
-    });
-    return { ...keySig, notes };
-  }, [key, accidentals, scale]);
+  const keySignature = useMemo(
+    () => getKeySignatureSpelledLike(key, accidentals === 'sharp', scale.notes),
+    [key, accidentals, scale]
+  );
 
-  const [acceptedMidi, setAcceptedMidi] = useState<number[]>([]);
-  // the learning keyboard follows the octave the scale is played in
-  const [octaveShift, setOctaveShift] = useState(0);
+  // the reducer matches played keys: accepted keys and the octave of the learning keyboard
+  const { acceptedMidi, octaveShift } = state;
 
   const onNoteOn = useCallback(
     (midi: number) => {
       const noteName = getNoteInKeySignature(Note.fromMidi(midi), keySignature.notes);
-      const playedStep = getPlayedStep(steps, position, midi, quizSettings.jumpBack);
-
-      if (playedStep) {
-        setAcceptedMidi((list) => [...list, midi]);
-        setOctaveShift(getOctaveShift(playedStep, midi));
-      }
       dispatch({ type: 'NOTE_ON', midi, noteName });
     },
-    [keySignature, steps, position, quizSettings.jumpBack]
+    [keySignature]
   );
 
   useNoteOn(onNoteOn);
 
   useEffect(() => {
-    setAcceptedMidi((list) => {
-      const held = list.filter((m) => playedMidiNotes.includes(m));
-      return held.length === list.length ? list : held;
-    });
+    dispatch({ type: 'NOTES_HELD', midi: playedMidiNotes });
   }, [playedMidiNotes]);
 
   const hands = useMemo(() => getHands(quizSettings), [quizSettings]);
   const fingers = useMemo(() => getFingers(scale, steps), [scale, steps]);
 
   const { requiredCleanRuns } = quizSettings;
+
+  const relative = useMemo(
+    () => (quizSettings.displayRelative ? getRelativeScale(scale) : null),
+    [quizSettings.displayRelative, scale]
+  );
 
   const sequenceLength = useMemo(
     () => getScaleSequence(quizSettings.scales, quizSettings.tonics === 'natural').length,
@@ -94,11 +85,16 @@ const ScaleQuiz: React.FC = () => {
   return (
     <div id="ScaleQuiz" className={cx('base', { 'base--learning': quizSettings.learningMode })}>
       <div className={cx('topContainer')}>
-        {quizSettings.displayReaction && (
-          <div className={cx('reactionContainer')}>
-            <QuizReaction gameState={state.feedback} />
-          </div>
-        )}
+        <div className={cx('reactionContainer')}>
+          {requiredCleanRuns > 1 && (
+            <QuizRuns done={state.cleanRuns} required={requiredCleanRuns} />
+          )}
+          {quizSettings.displayReaction && (
+            <div className={cx('reaction')}>
+              <QuizReaction id="ScaleQuizReaction" gameState={state.feedback} />
+            </div>
+          )}
+        </div>
         {quizSettings.gamification && (
           <QuizGameList
             className={cx('gameList')}
@@ -122,6 +118,11 @@ const ScaleQuiz: React.FC = () => {
       <div className={cx('scaleName')} key={scale.id}>
         {scale.label}
       </div>
+      {relative && (
+        <div className={cx('relative')} key={`relative-${scale.id}`}>
+          Relative: {relative.label}
+        </div>
+      )}
       <div className={cx('instruction')}>
         Play the scale {DIRECTIONS[quizSettings.direction]}, one note at a time
         {requiredCleanRuns > 0 &&
@@ -161,7 +162,6 @@ const ScaleQuiz: React.FC = () => {
           {quizSettings.mode === 'sequential' &&
             ` · C to B ${(state.sequenceIndex % sequenceLength) + 1} / ${sequenceLength}`}
           {` · ${state.mistakes} mistake${state.mistakes === 1 ? '' : 's'}`}
-          {requiredCleanRuns > 0 && ` · perfect runs ${state.cleanRuns} / ${requiredCleanRuns}`}
           {state.perfectStreak > 1 && ` · ${state.perfectStreak} perfect in a row`}
         </div>
         {quizSettings.gamification && (

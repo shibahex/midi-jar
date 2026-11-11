@@ -40,6 +40,9 @@ export type ChordDisplaySettings = {
   keyboard: KeyboardSettings;
 };
 
+/** Hands to display finger numbers for, in learning modes */
+export type Fingering = 'right' | 'left' | 'both' | 'none';
+
 export type ChordQuizSettings = {
   mode: 'random' | 'randomInKey';
   difficulty: 0 | 1 | 2 | 3 | 4 | 5;
@@ -49,6 +52,9 @@ export type ChordQuizSettings = {
   displayName: boolean;
   displayReaction: boolean;
   displayIntervals: boolean;
+  learningMode: boolean;
+  fingering: Fingering;
+  displayRelative: boolean;
 };
 
 export type ScaleSet =
@@ -68,11 +74,12 @@ export type ScaleQuizSettings = {
   requiredCleanRuns: number;
   jumpBack: boolean;
   learningMode: boolean;
-  fingering: 'right' | 'left' | 'both' | 'none';
+  fingering: Fingering;
   gamification: boolean;
   displayReaction: boolean;
   displayNoteNames: boolean;
   displayFormula: boolean;
+  displayRelative: boolean;
 };
 
 export type ScaleDegreesSettings = {
@@ -83,6 +90,7 @@ export type ScaleDegreesSettings = {
   displayReaction: boolean;
   displayScaleNotes: boolean;
   displayDegreeName: boolean;
+  displayRelative: boolean;
 };
 
 export type CircleOfFifthsSettings = {

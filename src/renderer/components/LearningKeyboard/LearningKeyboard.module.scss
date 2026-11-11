@@ -1,0 +1,74 @@
+@import 'tokens';
+
+.base {
+  // keyboard height follows its width
+  width: min(100%, 900px, 85vh);
+  margin-top: min(3vh, 2vw);
+  padding: 0 $space-lg;
+  flex-shrink: 0;
+}
+
+.keyboardContainer {
+  position: relative;
+}
+
+.keyboard {
+  width: 100%;
+}
+
+.fingers {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: baseline;
+  gap: 0.3em 1em;
+  margin-top: 0.6em;
+  font-size: clamp(13px, min(2.2vh, 2vw), 20px);
+}
+
+.hand {
+  padding: 0.1em 0.6em;
+  border-radius: 1em;
+  border: 2px solid;
+
+  &--right {
+    border-color: $color-primary-normal;
+  }
+
+  &--left {
+    border-color: $color-warning-normal;
+  }
+}
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 0.4em 1em;
+  margin-top: 0.5em;
+  font-size: clamp(11px, min(1.8vh, 1.6vw), 16px);
+  opacity: 0.7;
+}
+
+.legendItem {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4em;
+}
+
+.legendColor {
+  display: inline-block;
+  width: 1em;
+  height: 1em;
+  border-radius: 2px;
+  border: 1px solid $color-neutral-dark;
+
+  &--target {
+    background: $color-primary-normal;
+  }
+
+  &--soft {
+    background: $color-neutral-lighter;
+  }
+}

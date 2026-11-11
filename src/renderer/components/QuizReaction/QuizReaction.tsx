@@ -10,15 +10,18 @@ import styles from './QuizReaction.module.scss';
 const cx = classnames.bind(styles);
 
 type Props = {
+  /** element id, so that each quiz can be styled on its own (e.g. in an overlay) */
+  id?: string;
   className?: string;
   gameState: Pick<GameState, 'index' | 'status' | 'score'>;
 };
 
 const defaultProps = {
+  id: undefined,
   className: undefined,
 };
 
-export const QuizReaction: React.FC<Props> = ({ className, gameState }) => {
+export const QuizReaction: React.FC<Props> = ({ id, className, gameState }) => {
   const [reaction, setReaction] = useState<Reaction | null>(null);
   const reactionTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -45,7 +48,7 @@ export const QuizReaction: React.FC<Props> = ({ className, gameState }) => {
 
   return reaction ? (
     <div
-      id="ChordQuizReaction"
+      id={id}
       className={cx(
         'reaction',
         `reaction--${STATUSES[reaction.status]}`,

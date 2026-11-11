@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useReducer } from 'react';
+import React, { useCallback, useEffect, useMemo, useReducer } from 'react';
 import classnames from 'classnames/bind';
 import { Note } from 'tonal';
 import { Button } from '@la-jarre-a-son/ui';
@@ -13,6 +13,7 @@ import {
   getKeySignature,
   getNoteInKeySignature,
   getOrdinal,
+  getRelativeScale,
 } from 'renderer/helpers';
 
 import { init, reducer, REVEAL_AFTER_MISTAKES } from './reducer';
@@ -49,13 +50,17 @@ const ScaleDegrees: React.FC = () => {
   const { scale, degree, lastPlayed } = state;
   const degreeName = getDegreeName(scale, degree);
   const revealed = state.mistakes >= REVEAL_AFTER_MISTAKES;
+  const relative = useMemo(
+    () => (quizSettings.displayRelative ? getRelativeScale(scale) : null),
+    [quizSettings.displayRelative, scale]
+  );
 
   return (
     <div id="ScaleDegrees" className={cx('base')}>
       <div className={cx('topContainer')}>
         {quizSettings.displayReaction && (
           <div className={cx('reactionContainer')}>
-            <QuizReaction gameState={state.feedback} />
+            <QuizReaction id="ScaleDegreesReaction" gameState={state.feedback} />
           </div>
         )}
         {quizSettings.gamification && (
@@ -82,6 +87,11 @@ const ScaleDegrees: React.FC = () => {
       <div className={cx('scaleName')} key={scale.id}>
         {scale.label}
       </div>
+      {relative && (
+        <div className={cx('relative')} key={`relative-${scale.id}`}>
+          Relative: {relative.label}
+        </div>
+      )}
 
       <div className={cx('question')} key={`${scale.id}-${state.questionIndex}`}>
         <span className={cx('questionLabel')}>play the</span>
