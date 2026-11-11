@@ -25,14 +25,20 @@ jobs:
           registry-url: 'https://npm.pkg.github.com'
           scope: '@la-jarre-a-son'
 
-      - name: Use node-gyp with Visual Studio 2026 support
-        shell: bash
-        run: |
-          npm install -g node-gyp@12
-          echo "npm_config_node_gyp=$(npm root -g)/node-gyp/bin/node-gyp.js" >> "$GITHUB_ENV"
+      - name: Install dependencies (scripts disabled)
+        run: npm ci --ignore-scripts
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Install dependencies
-        run: npm ci
+      # @electron/rebuild pulls in node-gyp 9, which can't detect Visual Studio 2026.
+      # Replace the copy in ./node_modules before any native module gets compiled.
+      - name: Use node-gyp with Visual Studio 2026 support
+        run: npm install --no-save --ignore-scripts node-gyp@12
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Run postinstall
+        run: npm run postinstall
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -47,6 +53,5 @@ jobs:
           # This is used for uploading release assets to github
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          npm run postinstall
           npm run build
           npm exec electron-builder -- --publish always --win
