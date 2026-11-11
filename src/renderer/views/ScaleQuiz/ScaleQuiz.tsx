@@ -87,7 +87,7 @@ const ScaleQuiz: React.FC = () => {
       <div className={cx('topContainer')}>
         <div className={cx('reactionContainer')}>
           {requiredCleanRuns > 1 && (
-            <QuizRuns done={state.cleanRuns} required={requiredCleanRuns} />
+            <QuizRuns className={cx('runs')} done={state.cleanRuns} required={requiredCleanRuns} />
           )}
           {quizSettings.displayReaction && (
             <div className={cx('reaction')}>
@@ -123,12 +123,6 @@ const ScaleQuiz: React.FC = () => {
           Relative: {relative.label}
         </div>
       )}
-      <div className={cx('instruction')}>
-        Play the scale {DIRECTIONS[quizSettings.direction]}, one note at a time
-        {requiredCleanRuns > 0 &&
-          ` · ${requiredCleanRuns} perfect run${requiredCleanRuns > 1 ? 's' : ''} in a row`}
-      </div>
-
       <ScaleQuizSteps
         scale={scale}
         steps={steps}
@@ -139,7 +133,14 @@ const ScaleQuiz: React.FC = () => {
         displayFormula={quizSettings.displayFormula}
         hands={hands}
         fingers={fingers}
+        compact={quizSettings.learningMode}
       />
+
+      <div className={cx('instruction')}>
+        Play the scale {DIRECTIONS[quizSettings.direction]}, one note at a time
+        {requiredCleanRuns > 0 &&
+          ` · ${requiredCleanRuns} perfect run${requiredCleanRuns > 1 ? 's' : ''} in a row`}
+      </div>
 
       {quizSettings.learningMode && (
         <ScaleQuizKeyboard
