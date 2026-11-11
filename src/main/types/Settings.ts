@@ -43,8 +43,18 @@ export type ChordDisplaySettings = {
 /** Hands to display finger numbers for, in learning modes */
 export type Fingering = 'right' | 'left' | 'both' | 'none';
 
+/** Tonics asked in quizzes: every key, or natural keys only (no sharp or flat) */
+export type Tonics = 'all' | 'natural';
+
+/** Chord types asked in the chord quiz ("all" uses the difficulty) */
+export type ChordSet = 'majorMinor' | 'triads' | 'sevenths' | 'ninths' | 'triadsSevenths' | 'all';
+
 export type ChordQuizSettings = {
-  mode: 'random' | 'randomInKey';
+  mode: 'random' | 'randomInKey' | 'progressions';
+  chords: ChordSet;
+  /** chords of the set left out (tonal names, e.g. "m" or "dim") */
+  excludedChords: string[];
+  tonics: Tonics;
   difficulty: 0 | 1 | 2 | 3 | 4 | 5;
   gameLength: number;
   gamification: boolean;
@@ -57,6 +67,12 @@ export type ChordQuizSettings = {
   displayRelative: boolean;
   /** stays on the chord after a wrong answer, until the right chord is played */
   retryUntilCorrect: boolean;
+  /** key of the progressions: random, or the current key (notation settings) */
+  progressionKey: 'random' | 'current';
+  /** progressions left out (ids, e.g. "ii-V-I") */
+  excludedProgressions: string[];
+  /** progressions written by the user, one per line (e.g. "I vi ii V") */
+  customProgressions: string;
 };
 
 export type ScaleSet =
@@ -70,7 +86,7 @@ export type ScaleSet =
 
 export type ScaleQuizSettings = {
   mode: 'random' | 'randomInKey' | 'sequential';
-  tonics: 'all' | 'natural';
+  tonics: Tonics;
   scales: ScaleSet;
   direction: 'up' | 'down' | 'upDown';
   requiredCleanRuns: number;
@@ -86,6 +102,7 @@ export type ScaleQuizSettings = {
 
 export type ScaleDegreesSettings = {
   mode: 'random' | 'randomInKey';
+  tonics: Tonics;
   scales: ScaleSet;
   gameLength: number;
   gamification: boolean;
@@ -93,6 +110,8 @@ export type ScaleDegreesSettings = {
   displayScaleNotes: boolean;
   displayDegreeName: boolean;
   displayRelative: boolean;
+  /** keyboard with the keys of the scale and their degrees */
+  learningMode: boolean;
 };
 
 export type CircleOfFifthsSettings = {

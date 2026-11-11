@@ -1,10 +1,23 @@
 import { getDictionaryChordsByComplexity } from 'renderer/hooks/useQuiz';
 
-import { fingeringChoices } from '../fields';
+import { fingeringChoices, tonicsChoices } from '../fields';
 
 export const fields = {
   fingering: {
     choices: fingeringChoices,
+  },
+  tonics: {
+    choices: tonicsChoices,
+  },
+  chords: {
+    choices: [
+      { value: 'majorMinor', label: 'Major & minor triads' },
+      { value: 'triads', label: 'Triads (with dim, aug, sus)' },
+      { value: 'sevenths', label: '7th chords' },
+      { value: 'ninths', label: '9th chords' },
+      { value: 'triadsSevenths', label: 'Triads & 7th chords' },
+      { value: 'all', label: 'All chords (by difficulty)' },
+    ],
   },
   mode: {
     choices: [
@@ -16,6 +29,16 @@ export const fields = {
         value: 'randomInKey',
         label: 'Random in Key',
       },
+      {
+        value: 'progressions',
+        label: 'Chord Progressions (I–IV–V, ii–V–I...)',
+      },
+    ],
+  },
+  progressionKey: {
+    choices: [
+      { value: 'random', label: 'Random key' },
+      { value: 'current', label: 'Current key (Notation settings)' },
     ],
   },
   difficulty: {

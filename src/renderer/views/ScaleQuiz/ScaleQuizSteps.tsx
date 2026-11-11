@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react';
 import classnames from 'classnames/bind';
 
+import { QuizRuns } from 'renderer/components';
 import { formatSharpsFlats, getDegreeLabel, Hand, ScaleInfo } from 'renderer/helpers';
 
 import { HINT_AFTER_MISTAKES, State, Step } from './reducer';
@@ -24,10 +25,13 @@ type Props = {
   fingers: Fingers;
   /** smaller boxes, to leave room for the learning keyboard */
   compact?: boolean;
+  /** runs in a row, shown above the notes when several are needed */
+  runs?: { done: number; required: number; message: string | null } | null;
 };
 
 const defaultProps = {
   compact: false,
+  runs: null,
 };
 
 /**
@@ -45,6 +49,7 @@ const ScaleQuizSteps: React.FC<Props> = ({
   hands,
   fingers,
   compact = false,
+  runs = null,
 }) => {
   const { boxes, goingDown, showDirection } = useMemo(
     () => getStepBoxes(steps, position),
@@ -59,9 +64,17 @@ const ScaleQuizSteps: React.FC<Props> = ({
 
   return (
     <>
-      {showDirection && (
-        <div className={cx('direction', { 'direction--down': goingDown })} key={String(goingDown)}>
-          {goingDown ? '← Down' : 'Up →'}
+      {(showDirection || runs) && (
+        <div className={cx('stepsHeader')}>
+          {runs && <QuizRuns done={runs.done} required={runs.required} message={runs.message} />}
+          {showDirection && (
+            <div
+              className={cx('direction', { 'direction--down': goingDown })}
+              key={String(goingDown)}
+            >
+              {goingDown ? '← Down' : 'Up →'}
+            </div>
+          )}
         </div>
       )}
       <div className={cx('steps')} style={{ fontSize }}>

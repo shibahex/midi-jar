@@ -6,3 +6,9 @@ export const fingeringChoices = [
   { value: 'both', label: 'Both hands' },
   { value: 'none', label: 'None' },
 ];
+
+/** Tonics asked: every key, or natural keys only */
+export const tonicsChoices = [
+  { value: 'all', label: 'All keys' },
+  { value: 'natural', label: 'Natural keys only (no sharps or flats)' },
+];

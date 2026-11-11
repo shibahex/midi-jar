@@ -73,6 +73,9 @@ const ChordQuiz: React.FC = () => {
   );
 
   const target = games[gameState.gameIndex]?.chords[gameState.index];
+  // progressions mode: the progression of the game, and where we are in it
+  const progression = games[gameState.gameIndex]?.progression;
+  const progressionStep = progression ? gameState.index % progression.numerals.length : -1;
   const relativeKey = useMemo(
     () => (target ? getChordRelativeKey(target.tonic, target.quality) : null),
     [target]
@@ -121,6 +124,28 @@ const ChordQuiz: React.FC = () => {
       )}
       {quizSettings.displayRelative && relativeKey && (
         <div className={cx('relativeKey')}>Relative key: {relativeKey}</div>
+      )}
+      {progression && (
+        <div className={cx('progression')}>
+          <div className={cx('progressionTitle')}>
+            Key of <strong>{progression.keyLabel}</strong> · {progression.label}
+          </div>
+          <div className={cx('progressionSteps')}>
+            {progression.numerals.map((numeral, i) => (
+              <div
+                // eslint-disable-next-line react/no-array-index-key
+                key={i}
+                className={cx('progressionStep', {
+                  'progressionStep--done': i < progressionStep,
+                  'progressionStep--current': i === progressionStep,
+                })}
+              >
+                <span className={cx('numeral')}>{numeral}</span>
+                <span className={cx('progressionChord')}>{progression.names[i]}</span>
+              </div>
+            ))}
+          </div>
+        </div>
       )}
       {quizSettings.displayIntervals && (
         <div className={cx('intervalsContainer')}>

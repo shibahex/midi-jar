@@ -228,6 +228,22 @@
                     ],
                     "type": "string"
                 },
+                "chords": {
+                    "description": "Chord types asked in the chord quiz (\"all\" uses the difficulty)",
+                    "enum": [
+                        "all",
+                        "majorMinor",
+                        "ninths",
+                        "sevenths",
+                        "triads",
+                        "triadsSevenths"
+                    ],
+                    "type": "string"
+                },
+                "customProgressions": {
+                    "description": "progressions written by the user, one per line (e.g. \"I vi ii V\")",
+                    "type": "string"
+                },
                 "difficulty": {
                     "enum": [
                         0,
@@ -251,6 +267,20 @@
                 "displayRelative": {
                     "type": "boolean"
                 },
+                "excludedChords": {
+                    "description": "chords of the set left out (tonal names, e.g. \"m\" or \"dim\")",
+                    "items": {
+                        "type": "string"
+                    },
+                    "type": "array"
+                },
+                "excludedProgressions": {
+                    "description": "progressions left out (ids, e.g. \"ii-V-I\")",
+                    "items": {
+                        "type": "string"
+                    },
+                    "type": "array"
+                },
                 "fingering": {
                     "description": "Hands to display finger numbers for, in learning modes",
                     "enum": [
@@ -272,14 +302,31 @@
                 },
                 "mode": {
                     "enum": [
+                        "progressions",
                         "random",
                         "randomInKey"
+                    ],
+                    "type": "string"
+                },
+                "progressionKey": {
+                    "description": "key of the progressions: random, or the current key (notation settings)",
+                    "enum": [
+                        "current",
+                        "random"
                     ],
                     "type": "string"
                 },
                 "retryUntilCorrect": {
                     "description": "stays on the chord after a wrong answer, until the right chord is played",
                     "type": "boolean"
+                },
+                "tonics": {
+                    "description": "Tonics asked in quizzes: every key, or natural keys only (no sharp or flat)",
+                    "enum": [
+                        "all",
+                        "natural"
+                    ],
+                    "type": "string"
                 }
             },
             "type": "object"
@@ -390,6 +437,10 @@
                 "gamification": {
                     "type": "boolean"
                 },
+                "learningMode": {
+                    "description": "keyboard with the keys of the scale and their degrees",
+                    "type": "boolean"
+                },
                 "mode": {
                     "enum": [
                         "random",
@@ -406,6 +457,14 @@
                         "minors",
                         "modes",
                         "pentatonics"
+                    ],
+                    "type": "string"
+                },
+                "tonics": {
+                    "description": "Tonics asked in quizzes: every key, or natural keys only (no sharp or flat)",
+                    "enum": [
+                        "all",
+                        "natural"
                     ],
                     "type": "string"
                 }
@@ -477,6 +536,7 @@
                     "type": "string"
                 },
                 "tonics": {
+                    "description": "Tonics asked in quizzes: every key, or natural keys only (no sharp or flat)",
                     "enum": [
                         "all",
                         "natural"

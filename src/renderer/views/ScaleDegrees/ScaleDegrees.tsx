@@ -5,6 +5,7 @@ import { Button } from '@la-jarre-a-son/ui';
 
 import { useSettings } from 'renderer/contexts/Settings';
 import useNoteOn from 'renderer/hooks/useNoteOn';
+import useNotes from 'renderer/hooks/useNotes';
 import { Icon, QuizGameList, QuizReaction } from 'renderer/components';
 import {
   formatSharpsFlats,
@@ -17,6 +18,7 @@ import {
 } from 'renderer/helpers';
 
 import { init, reducer, REVEAL_AFTER_MISTAKES } from './reducer';
+import ScaleDegreesKeyboard from './ScaleDegreesKeyboard';
 
 import styles from './ScaleDegrees.module.scss';
 
@@ -47,6 +49,9 @@ const ScaleDegrees: React.FC = () => {
 
   useNoteOn(onNoteOn);
 
+  // held keys, for the learning keyboard
+  const { playedMidiNotes, sustainedMidiNotes, midiNotes } = useNotes({ key, accidentals });
+
   const { scale, degree, lastPlayed } = state;
   const degreeName = getDegreeName(scale, degree);
   const revealed = state.mistakes >= REVEAL_AFTER_MISTAKES;
@@ -56,7 +61,7 @@ const ScaleDegrees: React.FC = () => {
   );
 
   return (
-    <div id="ScaleDegrees" className={cx('base')}>
+    <div id="ScaleDegrees" className={cx('base', { 'base--learning': quizSettings.learningMode })}>
       <div className={cx('topContainer')}>
         {quizSettings.displayReaction && (
           <div className={cx('reactionContainer')}>
@@ -122,6 +127,18 @@ const ScaleDegrees: React.FC = () => {
           );
         })}
       </div>
+
+      {quizSettings.learningMode && (
+        <ScaleDegreesKeyboard
+          scale={scale}
+          degree={degree}
+          keyName={key}
+          sharps={accidentals === 'sharp'}
+          playedMidiNotes={playedMidiNotes}
+          sustainedMidiNotes={sustainedMidiNotes}
+          midiNotes={midiNotes}
+        />
+      )}
 
       <div className={cx('playedContainer')}>
         <div className={cx('progress')}>

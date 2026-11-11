@@ -1,4 +1,4 @@
-import { fingeringChoices } from '../fields';
+import { fingeringChoices, tonicsChoices } from '../fields';
 
 export const fields = {
   mode: {
@@ -30,16 +30,7 @@ export const fields = {
     ],
   },
   tonics: {
-    choices: [
-      {
-        value: 'all',
-        label: 'All keys',
-      },
-      {
-        value: 'natural',
-        label: 'Natural keys only (no sharps or flats)',
-      },
-    ],
+    choices: tonicsChoices,
   },
   scales: {
     choices: [

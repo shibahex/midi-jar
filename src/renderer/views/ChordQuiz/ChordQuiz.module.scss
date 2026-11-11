@@ -155,6 +155,67 @@ $View_ChordQuiz_textShadow: 0 0.05em 0.1em rgba($color-black, 0.6) !default;
   font-weight: bold;
 }
 
+/** Progressions mode **/
+
+.progression {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.4em;
+  margin: min(1.5vh, 1.2vw) 0;
+  line-height: 1.25;
+}
+
+.progressionTitle {
+  font-size: clamp(12px, min(2.4vh, 2vw), 22px);
+  opacity: 0.85;
+}
+
+.progressionSteps {
+  display: flex;
+  gap: 0.3em;
+  font-size: clamp(16px, min(3.6vh, 2.8vw), 34px);
+}
+
+.progressionStep {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 2.6em;
+  padding: 0.2em 0.4em;
+  border-radius: 0.25em;
+  border: 2px solid $color-neutral-normal;
+  background: $color-neutral-darker;
+  opacity: 0.6;
+  transition:
+    background-color 0.2s,
+    border-color 0.2s,
+    opacity 0.2s;
+
+  &--done {
+    opacity: 1;
+    border-color: $color-success-normal;
+    background: $color-success-dark;
+  }
+
+  &--current {
+    opacity: 1;
+    border-color: $color-primary-light;
+    background: $color-primary-dark;
+    transform: scale(1.08);
+  }
+}
+
+.numeral {
+  font-weight: bold;
+  font-family: Georgia, 'Times New Roman', serif;
+}
+
+.progressionChord {
+  font-size: 0.55em;
+  opacity: 0.85;
+}
+
 // the app sets a fixed line-height globally: big text would overlap the next line
 .chordName {
   font-size: min(3vh, 3vw);

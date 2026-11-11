@@ -359,10 +359,16 @@ const migrations: Migrations<StoreType> = {
       ...settings,
       server: settings.server ?? { enabled: true, port: 25011 },
       chordQuiz: {
+        chords: 'all',
+        excludedChords: [],
+        tonics: 'all',
         learningMode: false,
         fingering: 'right',
         displayRelative: false,
         retryUntilCorrect: false,
+        progressionKey: 'random',
+        excludedProgressions: [],
+        customProgressions: '',
         ...settings.chordQuiz,
       },
       scaleQuiz: {
@@ -383,6 +389,7 @@ const migrations: Migrations<StoreType> = {
       },
       scaleDegrees: {
         mode: 'random',
+        tonics: 'all',
         scales: 'majorMinor',
         gameLength: 8,
         gamification: true,
@@ -390,6 +397,7 @@ const migrations: Migrations<StoreType> = {
         displayScaleNotes: false,
         displayDegreeName: true,
         displayRelative: false,
+        learningMode: false,
         ...settings.scaleDegrees,
       },
     };

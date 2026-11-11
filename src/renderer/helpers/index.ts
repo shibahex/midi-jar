@@ -8,3 +8,4 @@ export * from './note';
 export * from './chords';
 export * from './scales';
 export * from './fingering';
+export * from './progressions';
