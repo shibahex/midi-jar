@@ -1,10 +1,10 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import classnames from 'classnames/bind';
 
 import { formatSharpsFlats, getDegreeLabel, Hand, ScaleInfo } from 'renderer/helpers';
 
 import { HINT_AFTER_MISTAKES, State, Step } from './reducer';
-import { Fingers } from './utils';
+import { Fingers, getStepBoxes } from './utils';
 
 import styles from './ScaleQuiz.module.scss';
 
@@ -22,8 +22,18 @@ type Props = {
   displayFormula: boolean;
   hands: Hand[];
   fingers: Fingers;
+  /** smaller boxes, to leave room for the learning keyboard */
+  compact?: boolean;
 };
 
+const defaultProps = {
+  compact: false,
+};
+
+/**
+ * The notes of the scale, low to high, with the direction being played:
+ * going down, boxes fill again from right to left
+ */
 const ScaleQuizSteps: React.FC<Props> = ({
   scale,
   steps,
@@ -34,56 +44,70 @@ const ScaleQuizSteps: React.FC<Props> = ({
   displayFormula,
   hands,
   fingers,
+  compact = false,
 }) => {
-  // boxes shrink so that a long scale (up and down) stays on one row
-  const fontSize = `clamp(14px, min(4.5vh, 3vw, ${(92 / (steps.length * 3.1)).toFixed(
-    2
-  )}vw), 44px)`;
+  const { boxes, goingDown, showDirection } = useMemo(
+    () => getStepBoxes(steps, position),
+    [steps, position]
+  );
+
+  // boxes shrink so that long scales stay on one row
+  const fontSize = `clamp(14px, min(${compact ? 3.4 : 4.5}vh, 3vw, ${(
+    92 /
+    (boxes.length * 3.1)
+  ).toFixed(2)}vw), 44px)`;
 
   return (
-    <div className={cx('steps')} style={{ fontSize }}>
-      {steps.map((step, index) => {
-        const done = index < position;
-        const current = index === position;
-        const hint = current && positionMistakes >= HINT_AFTER_MISTAKES;
-        const visible = done || hint || displayNoteNames;
-        const wrong = current && lastPlayed && !lastPlayed.correct;
-        const back = current && lastPlayed?.back;
+    <>
+      {showDirection && (
+        <div className={cx('direction', { 'direction--down': goingDown })} key={String(goingDown)}>
+          {goingDown ? '← Down' : 'Up →'}
+        </div>
+      )}
+      <div className={cx('steps')} style={{ fontSize }}>
+        {boxes.map(({ step, current, done, passed }) => {
+          const hint = current && positionMistakes >= HINT_AFTER_MISTAKES;
+          const visible = done || passed || hint || displayNoteNames;
+          const wrong = current && lastPlayed && !lastPlayed.correct;
+          const back = current && lastPlayed?.back;
 
-        return (
-          <div
-            // eslint-disable-next-line react/no-array-index-key
-            key={`${scale.id}-${index}-${wrong ? lastPlayed?.id : ''}`}
-            className={cx('step', {
-              'step--done': done,
-              'step--current': current,
-              'step--hint': hint && !done,
-              'step--wrong': wrong,
-              'step--back': back,
-            })}
-          >
-            <span className={cx('stepNote')}>{visible ? formatSharpsFlats(step.note) : '?'}</span>
-            {displayFormula && (
-              <span className={cx('stepDegree')}>
-                {getDegreeLabel(scale.intervals[step.degree])}
-              </span>
-            )}
-            {hands.length > 0 && (
-              <span className={cx('stepFinger')}>
-                {hands
-                  .map((hand) =>
-                    hands.length > 1
-                      ? `${HAND_SHORT[hand]}${fingers[hand][step.upIndex]}`
-                      : fingers[hand][step.upIndex]
-                  )
-                  .join(' ')}
-              </span>
-            )}
-          </div>
-        );
-      })}
-    </div>
+          return (
+            <div
+              key={`${scale.id}-${step.upIndex}-${wrong ? lastPlayed?.id : ''}`}
+              className={cx('step', {
+                'step--done': done && !current,
+                'step--passed': passed && !current,
+                'step--current': current,
+                'step--hint': hint,
+                'step--wrong': wrong,
+                'step--back': back,
+              })}
+            >
+              <span className={cx('stepNote')}>{visible ? formatSharpsFlats(step.note) : '?'}</span>
+              {displayFormula && (
+                <span className={cx('stepDegree')}>
+                  {getDegreeLabel(scale.intervals[step.degree])}
+                </span>
+              )}
+              {hands.length > 0 && (
+                <span className={cx('stepFinger')}>
+                  {hands
+                    .map((hand) =>
+                      hands.length > 1
+                        ? `${HAND_SHORT[hand]}${fingers[hand][step.upIndex]}`
+                        : fingers[hand][step.upIndex]
+                    )
+                    .join(' ')}
+                </span>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </>
   );
 };
+
+ScaleQuizSteps.defaultProps = defaultProps;
 
 export default ScaleQuizSteps;

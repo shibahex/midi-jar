@@ -349,7 +349,7 @@ Hopefully in the future, this module will be able to have an "Intelligent" mode 
 
 ## Scale Quiz
 
-![MIDI Jar Scale Quiz Example](assets/midi-jar-scale-quiz.png)
+https://github.com/user-attachments/assets/16d7f8a6-d1e6-4252-9f60-19f89e0a6f60
 
 You can learn scales by using the Scale Quiz module.
 
