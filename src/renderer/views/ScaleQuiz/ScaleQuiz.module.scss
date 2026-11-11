@@ -111,8 +111,7 @@ $View_ScaleQuiz_textShadow: 0 0.05em 0.1em rgba($color-black, 0.6) !default;
 }
 
 .instruction {
-  // below the notes of the scale
-  margin-top: min(2vh, 1.5vw);
+  margin-top: 0.5em;
   font-size: clamp(12px, min(2.2vh, 2vw), 22px);
   opacity: 0.6;
   padding: 0 $space-lg;

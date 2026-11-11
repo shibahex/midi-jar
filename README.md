@@ -349,7 +349,7 @@ Hopefully in the future, this module will be able to have an "Intelligent" mode 
 
 ## Scale Quiz
 
-https://github.com/user-attachments/assets/16d7f8a6-d1e6-4252-9f60-19f89e0a6f60
+https://github.com/user-attachments/assets/79e10d36-a1fd-4e74-b41e-3aac776a5d1a
 
 You can learn scales by using the Scale Quiz module.
 

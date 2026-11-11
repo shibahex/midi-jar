@@ -123,6 +123,12 @@ const ScaleQuiz: React.FC = () => {
           Relative: {relative.label}
         </div>
       )}
+      <div className={cx('instruction')}>
+        Play the scale {DIRECTIONS[quizSettings.direction]}, one note at a time
+        {requiredCleanRuns > 0 &&
+          ` · ${requiredCleanRuns} perfect run${requiredCleanRuns > 1 ? 's' : ''} in a row`}
+      </div>
+
       <ScaleQuizSteps
         scale={scale}
         steps={steps}
@@ -135,12 +141,6 @@ const ScaleQuiz: React.FC = () => {
         fingers={fingers}
         compact={quizSettings.learningMode}
       />
-
-      <div className={cx('instruction')}>
-        Play the scale {DIRECTIONS[quizSettings.direction]}, one note at a time
-        {requiredCleanRuns > 0 &&
-          ` · ${requiredCleanRuns} perfect run${requiredCleanRuns > 1 ? 's' : ''} in a row`}
-      </div>
 
       {quizSettings.learningMode && (
         <ScaleQuizKeyboard
@@ -163,7 +163,6 @@ const ScaleQuiz: React.FC = () => {
           {quizSettings.mode === 'sequential' &&
             ` · C to B ${(state.sequenceIndex % sequenceLength) + 1} / ${sequenceLength}`}
           {` · ${state.mistakes} mistake${state.mistakes === 1 ? '' : 's'}`}
-          {state.perfectStreak > 1 && ` · ${state.perfectStreak} perfect in a row`}
         </div>
         {quizSettings.gamification && (
           <div className={cx('score')}>{state.games[state.games.length - 1].score} pts</div>
