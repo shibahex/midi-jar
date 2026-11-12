@@ -29,6 +29,7 @@ import {
 import { ImportedSong, SongPartRole } from 'main/types';
 
 import ToggleList, { useExcludedList } from '../ToggleList';
+import { SpotifySettings, SpotifySongLink } from './SpotifySettings';
 import { fields } from './constants';
 
 import styles from '../ChordQuizSettings/ChordQuizSettings.module.scss';
@@ -52,7 +53,7 @@ const SONG_FILES = '.cho,.chordpro,.chopro,.pro,.crd,.txt';
  * Songs imported from chord sheets: a file is read and added, or removed from the list
  */
 const ImportSongs: React.FC<{ songs: ImportedSong[] }> = ({ songs }) => {
-  const { updateSetting } = useSettings();
+  const { settings, updateSetting } = useSettings();
   const input = useRef<HTMLInputElement>(null);
   const [messages, setMessages] = useState<{ text: string; error: boolean }[]>([]);
 
@@ -155,6 +156,18 @@ const ImportSongs: React.FC<{ songs: ImportedSong[] }> = ({ songs }) => {
     );
   };
 
+  // the Spotify link of a song
+  const spotifyOn = !!settings.rhythmGame.spotifySync;
+  const setSpotify = (id: string, link: ImportedSong['spotify']) =>
+    updateSetting(
+      'rhythmGame.customSongs',
+      songs.map((song) => {
+        if (song.id !== id) return song;
+        const { spotify: _old, ...rest } = song;
+        return link ? { ...rest, spotify: link } : rest;
+      })
+    );
+
   const remove = (id: string) =>
     updateSetting(
       'rhythmGame.customSongs',
@@ -232,6 +245,9 @@ const ImportSongs: React.FC<{ songs: ImportedSong[] }> = ({ songs }) => {
               >
                 <Icon name="trash" />
               </Button>
+              {spotifyOn && (
+                <SpotifySongLink song={song} onChange={(link) => setSpotify(song.id, link)} />
+              )}
             </li>
           ))}
         </ul>
@@ -283,6 +299,8 @@ const RhythmGameSettings: React.FC = () => {
           >
             <ImportSongs songs={importedSongs} />
           </FormField>
+
+          <SpotifySettings />
 
           <FormField label="Tempo" hint="Beats per minute: any tempo, - and + change it by 5">
             <InputNumber

@@ -514,6 +514,21 @@
                                 },
                                 "type": "array"
                             },
+                            "spotify": {
+                                "description": "the song on Spotify, and where its first chord is in the recording (ms, once synced)",
+                                "properties": {
+                                    "firstChordMs": {
+                                        "type": "number"
+                                    },
+                                    "name": {
+                                        "type": "string"
+                                    },
+                                    "uri": {
+                                        "type": "string"
+                                    }
+                                },
+                                "type": "object"
+                            },
                             "title": {
                                 "type": "string"
                             },
@@ -618,6 +633,14 @@
                 },
                 "speedUp": {
                     "description": "the song speeds up (5% every 4 hits in a row, up to 1.5 times)",
+                    "type": "boolean"
+                },
+                "spotifyClientId": {
+                    "description": "Spotify: the Client ID of the user's Spotify app (to log in)",
+                    "type": "string"
+                },
+                "spotifySync": {
+                    "description": "Spotify: songs linked to Spotify play there, in time with the game",
                     "type": "boolean"
                 },
                 "tempo": {

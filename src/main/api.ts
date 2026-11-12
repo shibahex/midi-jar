@@ -24,6 +24,7 @@ import {
 } from './windowState';
 import { WindowState } from './types/WindowState';
 import { checkUpdates } from './update';
+import * as spotify from './spotify';
 
 function sendToAll(channel: string, ...args: unknown[]) {
   const windows = BrowserWindow.getAllWindows();
@@ -259,3 +260,42 @@ ipcMain.handle('app:fetchPage', async (_event, url: string) => {
     clearTimeout(timeout);
   }
 });
+
+/* SPOTIFY */
+
+/** errors of the main process reach the renderer as plain messages */
+const spotifyCall =
+  <A extends unknown[], R>(call: (...args: A) => Promise<R>) =>
+  (_event: unknown, ...args: A) =>
+    call(...args);
+
+ipcMain.handle(
+  'spotify:login',
+  spotifyCall((clientId: string) => spotify.login(clientId))
+);
+ipcMain.handle('spotify:logout', () => spotify.logout());
+ipcMain.handle(
+  'spotify:status',
+  spotifyCall(() => spotify.getStatus())
+);
+ipcMain.handle(
+  'spotify:player',
+  spotifyCall(() => spotify.getPlayer())
+);
+ipcMain.handle(
+  'spotify:play',
+  spotifyCall((uri: string, ms: number) => spotify.play(uri, ms))
+);
+ipcMain.handle(
+  'spotify:pause',
+  spotifyCall(() => spotify.pause())
+);
+ipcMain.handle(
+  'spotify:seek',
+  spotifyCall((ms: number) => spotify.seek(ms))
+);
+ipcMain.handle(
+  'spotify:search',
+  spotifyCall((query: string) => spotify.search(query))
+);
+ipcMain.handle('spotify:redirectUri', () => spotify.SPOTIFY_REDIRECT_URI);

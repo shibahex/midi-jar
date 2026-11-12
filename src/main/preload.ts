@@ -1,6 +1,14 @@
 import { contextBridge, ipcRenderer, IpcRendererEvent } from 'electron';
 
-import { MidiMessage, ServerState, Settings, UpdateInfo } from './types';
+import {
+  MidiMessage,
+  ServerState,
+  Settings,
+  SpotifyPlayer,
+  SpotifyStatus,
+  SpotifyTrack,
+  UpdateInfo,
+} from './types';
 
 import { ApiMidiInput, ApiMidiOutput, ApiMidiRoute, ApiMidiWire } from './types/api';
 import { WindowState } from './types/WindowState';
@@ -19,6 +27,19 @@ const registerListener =
 export const AppApi = {
   quit: () => ipcRenderer.send('app:quit'),
   fetchPage: (url: string): Promise<string> => ipcRenderer.invoke('app:fetchPage', url),
+  spotify: {
+    login: (clientId: string): Promise<void> => ipcRenderer.invoke('spotify:login', clientId),
+    logout: (): Promise<void> => ipcRenderer.invoke('spotify:logout'),
+    status: (): Promise<SpotifyStatus> => ipcRenderer.invoke('spotify:status'),
+    player: (): Promise<SpotifyPlayer | null> => ipcRenderer.invoke('spotify:player'),
+    play: (uri: string, positionMs: number): Promise<void> =>
+      ipcRenderer.invoke('spotify:play', uri, positionMs),
+    pause: (): Promise<void> => ipcRenderer.invoke('spotify:pause'),
+    seek: (positionMs: number): Promise<void> => ipcRenderer.invoke('spotify:seek', positionMs),
+    search: (query: string): Promise<SpotifyTrack | null> =>
+      ipcRenderer.invoke('spotify:search', query),
+    redirectUri: (): Promise<string> => ipcRenderer.invoke('spotify:redirectUri'),
+  },
   settings: {
     clear: () => ipcRenderer.send('app:settings:clear'),
     reset: (key: keyof Settings) => ipcRenderer.invoke('app:settings:reset', key),

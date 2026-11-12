@@ -3,3 +3,4 @@ export * from './Midi';
 export * from './Server';
 export * from './Settings';
 export * from './UpdateInfo';
+export * from './Spotify';
