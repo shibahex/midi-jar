@@ -297,6 +297,17 @@ const RhythmGameSettings: React.FC = () => {
             />
           </FormField>
 
+          <FormField
+            label="Sound"
+            hint="The built-in sound plays the chords as they reach the line (hear the song), a click on the beat, or nothing. Listen plays the whole song by itself. The volume is in the general settings."
+          >
+            <Select
+              options={fields.sound.choices}
+              onChange={(value) => updateSetting('rhythmGame.sound', value)}
+              value={game.sound ?? 'chords'}
+            />
+          </FormField>
+
           <FormControlLabel
             label="Speed Up"
             hint="The song gets faster as you play well: 5% every 4 chords in a row, up to 1.5 times the tempo"

@@ -47,6 +47,7 @@ MIDI Jar includes:
 - A Rhythm Game, to play the chords of songs in time (built-in songs, or imported from chord sheets and Ultimate Guitar)
 - A Learning Mode for the quizzes and the Rhythm Game, showing the keys to play and the fingering
 - A HTTP/Websocket server to include modules externally (in OBS Browser source for instance)
+- A built-in sound: hear the notes of your MIDI keyboard (`Play My Notes` in the general settings, with the sustain pedal) and the songs of the Rhythm Game
 - Running at startup
 - Running in background (no window, only Tray icon)
 
@@ -366,6 +367,7 @@ Play along a song: its chords scroll toward a hit line in time with the beat (af
 - `Pattern`: chords follow the song's own rhythm (how long each chord lasts, its time signature like the 3/4 of Amazing Grace, the strumming of Ultimate Guitar songs), or a fixed pattern: once per bar, twice, or on every beat (release the keys between repeated chords)
 - `Tempo`: beats per minute, or `Song's Tempo` to play imported songs at their own tempo. With `Speed Up`, the song gets 5% faster every 4 chords in a row, up to 1.5 times the tempo
 - `Song Name`: shown from the start, or kept a mystery until the end
+- `Sound`: the built-in sound plays the chords as they reach the line, a click on the beat, both, or nothing. `Listen` plays the whole song by itself before you play it
 - `Learning Mode`: a keyboard with the keys and fingering of the next chord, and what happens on a miss: keep going, wait until the missed chord is played, or slow the song down (it speeds back up after 4 hits in a row)
 - `Import Songs`: from ChordPro files (`.cho`, `.chordpro`, `.chopro`, `.pro`, `.crd`, with `[Am]` chords and `{title:}` / `{key:}` / `{tempo:}` / `{time:}`), chord sheets (`.txt`, lines of chords above the lyrics, Ultimate Guitar `[ch]` tags, bar lines like `| C G | Am | % |` for how long chords last), or the web address of a song: a Songsterr song (the chords are found from the notes of its rhythm guitar and bass, with the real tempo, time signature, timing and sections), an Ultimate Guitar chords page with its tempo and strumming, or another chord site. Songs are played in their own key with their numerals, a bar per chord unless bar lines tell otherwise. Importing a song again replaces it. Type a song's tempo in the list if it has none (Ultimate Guitar only gives one with a strumming pattern)
 - `Song`: play one song (also picked on the game screen), or random songs among the ones left in

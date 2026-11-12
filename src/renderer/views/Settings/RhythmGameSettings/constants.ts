@@ -22,6 +22,14 @@ export const fields = {
       { value: 'beat', label: 'On every beat' },
     ],
   },
+  sound: {
+    choices: [
+      { value: 'chords', label: 'The chords of the song' },
+      { value: 'click', label: 'A click on the beat' },
+      { value: 'both', label: 'Chords and click' },
+      { value: 'off', label: 'No sound' },
+    ],
+  },
   songKey: {
     choices: [
       { value: 'random', label: 'Random key' },

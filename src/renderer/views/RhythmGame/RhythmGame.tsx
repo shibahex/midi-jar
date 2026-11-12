@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import classnames from 'classnames/bind';
 import { Button, Select } from '@la-jarre-a-son/ui';
+import { Note } from 'tonal';
 
 import { useSettings } from 'renderer/contexts/Settings';
 import useNotes from 'renderer/hooks/useNotes';
@@ -9,6 +10,7 @@ import {
   formatSharpsFlats,
   getBestScaleForChroma,
   getAllSongs,
+  getChordVoicing,
   getIncludedSongs,
   getRelativeScale,
   getScaleInfo,
@@ -20,6 +22,8 @@ import {
   getImportedSongKey,
   PlayableSong,
 } from 'renderer/helpers';
+
+import { synth } from 'renderer/helpers/synth';
 
 import ChordQuizKeyboard from '../ChordQuiz/ChordQuizKeyboard';
 import {
@@ -46,6 +50,13 @@ const ALL_CHROMAS = Array.from({ length: 12 }, (_, chroma) => chroma);
 /** lane: where the hit line is, and how much of the lane a beat takes (percent) */
 const HIT_LINE = 15;
 const BEAT_WIDTH = 10;
+
+/** Notes of a chord played by the built-in sound: a bass note and the chord above it */
+function getGuideNotes(hit: Hit) {
+  const root = (Note.chroma(hit.chord.tonic ?? 'C') ?? 0) + 48;
+  const base = root < 53 ? root + 12 : root;
+  return [base - 12, ...getChordVoicing(hit.chord.intervals).map((s) => base + s)];
+}
 
 const LABELS: Record<HitResult, string> = { perfect: 'PERFECT!', good: 'Good', miss: 'Miss' };
 
@@ -172,6 +183,14 @@ const RhythmGame: React.FC = () => {
   comboRef.current = combo;
   // a chord must be released before the next hit (repeated chords are struck again)
   const armed = useRef(true);
+  // built-in sound: the chords of the song, a click on the beat
+  const sound = gameSettings.sound ?? 'chords';
+  const sounded = useRef(new Set<number>());
+  const lastBeat = useRef(-1);
+  // listening: the song plays by itself, nothing is judged
+  const [listening, setListening] = useState(false);
+  const listeningRef = useRef(false);
+  listeningRef.current = listening;
 
   // settings changed: new round, waiting to start
   useEffect(() => {
@@ -181,10 +200,14 @@ const RhythmGame: React.FC = () => {
     setPhase('ready');
   }, [newRound, makeHits]);
 
-  /** Plays a song from the start */
-  const start = (next: Round = round) => {
+  /** Plays a song from the start (or only listens to it) */
+  const start = (next: Round = round, listen = false) => {
     setRound(next);
     setHits(makeHits(next));
+    setListening(listen);
+    listeningRef.current = listen;
+    sounded.current = new Set();
+    lastBeat.current = -1;
     setCombo(0);
     setBestCombo(0);
     setScore(0);
@@ -225,10 +248,36 @@ const RhythmGame: React.FC = () => {
       const t = songTime.current;
       setNow(t);
 
+      // built-in sound (not while waiting for a missed chord)
+      if (waitingRef.current === null) {
+        const beatNow = Math.floor(t / beatMs);
+        if ((sound === 'click' || sound === 'both') && beatNow !== lastBeat.current) {
+          lastBeat.current = beatNow;
+          synth.click(beatNow % beatsPerBar === 0);
+        }
+        if (listeningRef.current || sound === 'chords' || sound === 'both') {
+          const due = hitsRef.current.filter((h) => t >= h.time && !sounded.current.has(h.id));
+          due.forEach((h) => {
+            sounded.current.add(h.id);
+            // a chord reached long ago (the song was paused) is not played late
+            if (t - h.time > 150) return;
+            const seconds = ((h.length * beatMs) / rateRef.current / 1000) * 0.85;
+            synth.play(getGuideNotes(h), seconds, h.chordStart ? 95 : 70);
+          });
+          // listening: the chords are played by the song itself
+          if (listeningRef.current && due.length) {
+            const ids = new Set(due.map((h) => h.id));
+            setHits((current) =>
+              current.map((h) => (ids.has(h.id) ? { ...h, result: 'perfect' } : h))
+            );
+          }
+        }
+      }
+
       // timing windows are real time: in song time they shrink when slowed down
-      const missed = hitsRef.current.filter(
-        (h) => !h.result && t > h.time + GOOD_MS * rateRef.current
-      );
+      const missed = listeningRef.current
+        ? []
+        : hitsRef.current.filter((h) => !h.result && t > h.time + GOOD_MS * rateRef.current);
       missed.forEach((h) => record(h.id, 'miss'));
       if (missed.length && onMiss === 'wait' && waitingRef.current === null) {
         // the song stops at the missed chord until it is played
@@ -250,7 +299,7 @@ const RhythmGame: React.FC = () => {
     };
     frame = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(frame);
-  }, [phase, beatMs, record, onMiss]);
+  }, [phase, beatMs, beatsPerBar, record, onMiss, sound]);
 
   // a chord is played: the closest chord to play in time is judged
   useEffect(() => {
@@ -258,7 +307,7 @@ const RhythmGame: React.FC = () => {
       armed.current = true;
       return;
     }
-    if (phase !== 'playing' || !armed.current) return;
+    if (phase !== 'playing' || !armed.current || listeningRef.current) return;
 
     // waiting for a missed chord: playing it starts the song again
     if (waitingRef.current !== null) {
@@ -346,6 +395,7 @@ const RhythmGame: React.FC = () => {
         <span>
           Key of <strong>{round.keyLabel}</strong> · {Math.round(round.tempo * rate)} BPM
           {beatsPerBar !== BEATS_PER_BAR && ` · ${beatsPerBar}/4`}
+          {listening && phase === 'playing' && <span className={cx('faster')}> · listening</span>}
           {round.noSongTempo && (
             <span className={cx('slowed')}>
               {' '}
@@ -451,6 +501,14 @@ const RhythmGame: React.FC = () => {
           </div>
           <div className={cx('buttons')}>
             {songPicker}
+            <Button
+              intent="neutral"
+              onClick={() => start(round, true)}
+              title="Hear the song played by itself before playing it"
+            >
+              <Icon name="visible" />
+              Listen
+            </Button>
             <Button intent="primary" onClick={() => start()}>
               <Icon name="music" />
               Start
@@ -462,22 +520,32 @@ const RhythmGame: React.FC = () => {
       {phase === 'done' && (
         <div className={cx('panel', 'panel--done')}>
           <div className={cx('panelTitle')}>
-            You just played the chords of <strong>{round.song.title}</strong>!
+            {listening ? (
+              <>
+                That was <strong>{round.song.title}</strong>: your turn now!
+              </>
+            ) : (
+              <>
+                You just played the chords of <strong>{round.song.title}</strong>!
+              </>
+            )}
           </div>
-          <div className={cx('stats')}>
-            <span className={cx('stat--perfect')}>Perfect {stats.perfect}</span>
-            <span className={cx('stat--good')}>Good {stats.good}</span>
-            <span className={cx('stat--miss')}>Miss {stats.miss}</span>
-            <span>Best combo {bestCombo}</span>
-            <span>Accuracy {accuracy}%</span>
-          </div>
+          {!listening && (
+            <div className={cx('stats')}>
+              <span className={cx('stat--perfect')}>Perfect {stats.perfect}</span>
+              <span className={cx('stat--good')}>Good {stats.good}</span>
+              <span className={cx('stat--miss')}>Miss {stats.miss}</span>
+              <span>Best combo {bestCombo}</span>
+              <span>Accuracy {accuracy}%</span>
+            </div>
+          )}
           <div className={cx('buttons')}>
             {songPicker}
-            <Button intent="neutral" onClick={() => start()}>
-              <Icon name="reset" />
-              Play again
+            <Button intent={listening ? 'primary' : 'neutral'} onClick={() => start()}>
+              <Icon name={listening ? 'music' : 'reset'} />
+              {listening ? 'Play it' : 'Play again'}
             </Button>
-            {!chosenSong && (
+            {!chosenSong && !listening && (
               <Button intent="primary" onClick={() => start(newRound(round.song.id))}>
                 <Icon name="music" />
                 Next song
