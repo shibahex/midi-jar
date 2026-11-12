@@ -116,6 +116,8 @@ export const defaultRhythmGameSettings: RhythmGameSettings = {
   practiceRamp: false,
   sound: 'chords' as const,
   songParts: ['rhythm', 'bass', 'lead', 'melody'] as SongPartRole[],
+  spotifyClientId: '',
+  spotifySync: false,
 };
 
 export const defaultScaleDegreesSettings: ScaleDegreesSettings = {

@@ -73,6 +73,8 @@ export type ImportedSong = {
   leadIn?: number;
   /** notes of the instruments (rhythm guitar, bass, lead, melody), to hear the real song */
   parts?: SongPart[];
+  /** the song on Spotify, and where its first chord is in the recording (ms, once synced) */
+  spotify?: { uri: string; name: string; firstChordMs?: number };
 };
 
 /** Tonics asked in quizzes: every key, or natural keys only (no sharp or flat) */
@@ -143,6 +145,10 @@ export type RhythmGameSettings = {
   sound: 'off' | 'chords' | 'click' | 'both';
   /** built-in sound: the parts of Songsterr songs heard (the rhythm guitar replaces the chords) */
   songParts: SongPartRole[];
+  /** Spotify: the Client ID of the user's Spotify app (to log in) */
+  spotifyClientId: string;
+  /** Spotify: songs linked to Spotify play there, in time with the game */
+  spotifySync: boolean;
 };
 
 export type ScaleSet =

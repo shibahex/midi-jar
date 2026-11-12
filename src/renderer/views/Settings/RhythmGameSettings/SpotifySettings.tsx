@@ -1,0 +1,211 @@
+import React, { useCallback, useEffect, useState } from 'react';
+import classnames from 'classnames/bind';
+import { Button, FormControlLabel, Input, Switch } from '@la-jarre-a-son/ui';
+
+import { useSettings } from 'renderer/contexts/Settings';
+import { Icon } from 'renderer/components';
+import { ImportedSong, SpotifyStatus } from 'main/types';
+
+import styles from '../ChordQuizSettings/ChordQuizSettings.module.scss';
+
+const cx = classnames.bind(styles);
+
+/** Messages of the main process: "Error invoking remote method ...: Error: message" */
+const errorText = (e: unknown) =>
+  e instanceof Error ? e.message.replace(/^.*Error: /, '') : String(e);
+
+/**
+ * Spotify: the user's own Spotify app (Client ID), the login, and syncing the game with it
+ */
+export const SpotifySettings: React.FC = () => {
+  const { settings, updateSetting } = useSettings();
+  const game = settings.rhythmGame;
+  const [clientId, setClientId] = useState(game.spotifyClientId ?? '');
+  const [status, setStatus] = useState<SpotifyStatus | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const [redirectUri, setRedirectUri] = useState('');
+
+  const refresh = useCallback(() => {
+    window.app.spotify
+      .status()
+      .then(setStatus)
+      .catch((e) => setError(errorText(e)));
+  }, []);
+
+  useEffect(() => {
+    refresh();
+    window.app.spotify
+      .redirectUri()
+      .then(setRedirectUri)
+      .catch(() => {});
+  }, [refresh]);
+
+  const connect = async () => {
+    setBusy(true);
+    setError('');
+    try {
+      await updateSetting('rhythmGame.spotifyClientId', clientId.trim());
+      await window.app.spotify.login(clientId.trim());
+      refresh();
+    } catch (e) {
+      setError(errorText(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const disconnect = async () => {
+    await window.app.spotify.logout();
+    refresh();
+  };
+
+  return (
+    <div className={cx('group')}>
+      <div className={cx('groupTitle')}>
+        <Icon name="music" />
+        Spotify
+      </div>
+      <div className={cx('groupHint')}>
+        Play imported songs on Spotify in time with the game. Once:
+        <ol className={cx('steps')}>
+          <li>
+            Create an app on{' '}
+            <a href="https://developer.spotify.com/dashboard" target="_blank" rel="noreferrer">
+              developer.spotify.com/dashboard
+            </a>{' '}
+            (any name, &quot;Web API&quot; checked)
+          </li>
+          <li>
+            Add this Redirect URI to it: <code className={cx('code')}>{redirectUri}</code>
+          </li>
+          <li>Paste its Client ID below and connect</li>
+        </ol>
+        Then link a song to Spotify in the list of imported songs, and sync it once (tap on its
+        first chord). Starting the song from the game needs Spotify Premium; without it, press play
+        in Spotify and the game follows.
+      </div>
+
+      <div className={cx('spotifyLogin')}>
+        <Input
+          value={clientId}
+          onChange={setClientId}
+          placeholder="Client ID"
+          aria-label="Spotify Client ID"
+          block
+        />
+        {status?.connected ? (
+          <Button intent="neutral" onClick={disconnect}>
+            Disconnect
+          </Button>
+        ) : (
+          <Button intent="primary" onClick={connect} disabled={busy || !clientId.trim()}>
+            {busy ? 'Waiting for the browser...' : 'Connect'}
+          </Button>
+        )}
+      </div>
+      <div className={cx('importMessage', { 'importMessage--error': !!error })}>
+        {error ||
+          (status?.connected && `Connected to Spotify${status.user ? ` as ${status.user}` : ''}`) ||
+          (status && !status.connected && (status.error ?? 'Not connected'))}
+      </div>
+
+      <FormControlLabel
+        label="Sync With Spotify"
+        hint="Songs linked to Spotify play there, and the game follows them (at the song's tempo: no slow down or wait on a miss)"
+        reverse
+      >
+        <Switch
+          checked={!!game.spotifySync}
+          onChange={(value) => updateSetting('rhythmGame.spotifySync', value)}
+        />
+      </FormControlLabel>
+    </div>
+  );
+};
+
+/**
+ * The Spotify link of an imported song: find it on Spotify, and adjust where its first chord is
+ */
+export const SpotifySongLink: React.FC<{
+  song: ImportedSong;
+  onChange: (spotify: ImportedSong['spotify'] | undefined) => void;
+}> = ({ song, onChange }) => {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+
+  const find = async () => {
+    setBusy(true);
+    setError('');
+    try {
+      // the song name without "by", then the one playing in Spotify if nothing is found
+      const query = song.title.replace(/\s+by\s+/i, ' ');
+      const track =
+        (await window.app.spotify.search(query)) ?? (await window.app.spotify.player())?.track;
+      if (!track) throw new Error('Not found on Spotify');
+      onChange({ uri: track.uri, name: `${track.name} (${track.artists})` });
+    } catch (e) {
+      setError(errorText(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const useCurrent = async () => {
+    setError('');
+    try {
+      const player = await window.app.spotify.player();
+      if (!player) throw new Error('Nothing plays in Spotify');
+      onChange({ uri: player.track.uri, name: `${player.track.name} (${player.track.artists})` });
+    } catch (e) {
+      setError(errorText(e));
+    }
+  };
+
+  const nudge = (ms: number) =>
+    song.spotify &&
+    onChange({ ...song.spotify, firstChordMs: Math.max(0, (song.spotify.firstChordMs ?? 0) + ms) });
+
+  if (!song.spotify) {
+    return (
+      <div className={cx('spotifySong')}>
+        <Button size="sm" intent="neutral" onClick={find} disabled={busy}>
+          {busy ? 'Searching...' : 'Find on Spotify'}
+        </Button>
+        <Button size="sm" variant="ghost" intent="neutral" onClick={useCurrent}>
+          Use the one playing
+        </Button>
+        {error && <span className={cx('importMessage', 'importMessage--error')}>{error}</span>}
+      </div>
+    );
+  }
+
+  return (
+    <div className={cx('spotifySong')}>
+      <span className={cx('spotifyName')} title={song.spotify.uri}>
+        Spotify: {song.spotify.name}
+      </span>
+      {song.spotify.firstChordMs === undefined ? (
+        <span className={cx('spotifyHint')}>not synced yet (Sync in the game)</span>
+      ) : (
+        <span className={cx('spotifyOffset')} title="Where the first chord is in the recording">
+          first chord at {(song.spotify.firstChordMs / 1000).toFixed(2)} s
+          <button type="button" onClick={() => nudge(-50)} title="50 ms earlier">
+            −
+          </button>
+          <button type="button" onClick={() => nudge(50)} title="50 ms later">
+            +
+          </button>
+        </span>
+      )}
+      <button
+        type="button"
+        className={cx('spotifyUnlink')}
+        onClick={() => onChange(undefined)}
+        title="Unlink from Spotify"
+      >
+        Unlink
+      </button>
+    </div>
+  );
+};

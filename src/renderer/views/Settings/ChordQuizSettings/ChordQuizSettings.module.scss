@@ -124,7 +124,11 @@
   }
 }
 
-/** A group of settings in a card (rhythm game practice) **/
+.tempo {
+  width: 6em;
+}
+
+/** A group of settings in a card **/
 
 .group {
   margin: 1em 0;
@@ -148,8 +152,82 @@
   margin: 0.3em 0 0.6em;
   font-size: 0.85em;
   opacity: 0.75;
+
+  a {
+    color: $color-primary-light;
+  }
 }
 
-.tempo {
-  width: 6em;
+/** Spotify **/
+
+.steps {
+  margin: 0.3em 0;
+  padding-left: 1.4em;
+}
+
+.code {
+  padding: 0 0.3em;
+  border-radius: 3px;
+  background: rgba($color-black, 0.4);
+  user-select: all;
+}
+
+.spotifyLogin {
+  display: flex;
+  gap: 6px;
+
+  > :first-child {
+    flex: 1;
+    min-width: 0;
+  }
+
+  > button {
+    flex-shrink: 0;
+  }
+}
+
+.importedSongs li {
+  flex-wrap: wrap;
+}
+
+.spotifySong {
+  display: flex;
+  flex-basis: 100%;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin: 2px 0 6px;
+  font-size: 0.8em;
+
+  button:not([class]) {
+    padding: 0 0.5em;
+    border: 1px solid rgba($color-white, 0.25);
+    border-radius: 3px;
+    background: transparent;
+    color: inherit;
+    cursor: pointer;
+  }
+}
+
+.spotifyName {
+  color: #1ed760;
+}
+
+.spotifyHint {
+  opacity: 0.6;
+}
+
+.spotifyOffset {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  opacity: 0.85;
+}
+
+.spotifyUnlink {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: $color-danger-light;
+  cursor: pointer;
 }
