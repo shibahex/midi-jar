@@ -7,6 +7,10 @@ import { Step } from './reducer';
 import { Fingers } from './utils';
 
 type Props = {
+  /** keys shown as "in the scale" (default: the keys of the steps) */
+  scaleKeys?: number[];
+  /** notes played in order (melodies): only the next note shows its finger */
+  sequential?: boolean;
   steps: Step[];
   position: number;
   keySignature: KeySignatureConfig;
@@ -20,6 +24,8 @@ type Props = {
 };
 
 const ScaleQuizKeyboard: React.FC<Props> = ({
+  scaleKeys,
+  sequential = false,
   steps: scaleSteps,
   position,
   keySignature,
@@ -39,7 +45,11 @@ const ScaleQuizKeyboard: React.FC<Props> = ({
 
   const nextStep = steps[position];
 
-  const scaleMidi = useMemo(() => steps.map((step) => step.midi), [steps]);
+  const scaleMidi = useMemo(
+    () =>
+      scaleKeys ? scaleKeys.map((midi) => midi + 12 * octaveShift) : steps.map((step) => step.midi),
+    [scaleKeys, steps, octaveShift]
+  );
 
   // the next key, and accepted keys still held so they are displayed as correct
   const targets = useMemo(
@@ -47,22 +57,33 @@ const ScaleQuizKeyboard: React.FC<Props> = ({
     [nextStep, acceptedMidi]
   );
 
-  const fingerMarks = useMemo(
-    () =>
-      hands.flatMap((hand) =>
-        steps
-          .filter((step, index) => steps.findIndex((s) => s.upIndex === step.upIndex) === index)
-          .map(
-            (step): FingerMark => ({
-              midi: step.midi,
+  const fingerMarks = useMemo(() => {
+    // a melody comes back to the same key with other fingers: only the next note is marked
+    if (sequential) {
+      return nextStep
+        ? hands.map(
+            (hand): FingerMark => ({
+              midi: nextStep.midi,
               hand,
-              finger: fingers[hand][step.upIndex],
-              next: !!nextStep && nextStep.upIndex === step.upIndex,
+              finger: fingers[hand][nextStep.upIndex],
+              next: true,
             })
           )
-      ),
-    [hands, steps, fingers, nextStep]
-  );
+        : [];
+    }
+    return hands.flatMap((hand) =>
+      steps
+        .filter((step, index) => steps.findIndex((s) => s.upIndex === step.upIndex) === index)
+        .map(
+          (step): FingerMark => ({
+            midi: step.midi,
+            hand,
+            finger: fingers[hand][step.upIndex],
+            next: !!nextStep && nextStep.upIndex === step.upIndex,
+          })
+        )
+    );
+  }, [sequential, hands, steps, fingers, nextStep]);
 
   return (
     <LearningKeyboard
@@ -99,6 +120,11 @@ const ScaleQuizKeyboard: React.FC<Props> = ({
       />
     </LearningKeyboard>
   );
+};
+
+ScaleQuizKeyboard.defaultProps = {
+  scaleKeys: undefined,
+  sequential: false,
 };
 
 export default ScaleQuizKeyboard;

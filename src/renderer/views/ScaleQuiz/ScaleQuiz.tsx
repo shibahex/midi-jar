@@ -12,6 +12,8 @@ import {
   getKeySignatureSpelledLike,
   getNoteInKeySignature,
   getRelativeScale,
+  getMelodyFingering,
+  getScaleKeys,
   getScaleSequence,
 } from 'renderer/helpers';
 
@@ -67,14 +69,35 @@ const ScaleQuiz: React.FC = () => {
     dispatch({ type: 'NOTES_HELD', midi: playedMidiNotes });
   }, [playedMidiNotes]);
 
+  // melodies and solo phrases: notes shown in the order played
+  const { melody } = state;
+  const solo = quizSettings.practice === 'solo';
+  // solo: every key of the scale is shown, to see where the phrase goes
+  const soloKeys = useMemo(() => (solo ? getScaleKeys(scale) : undefined), [solo, scale]);
   const hands = useMemo(() => getHands(quizSettings), [quizSettings]);
-  const fingers = useMemo(() => getFingers(scale, steps), [scale, steps]);
+  // melodies and solo phrases: fingering of the line of notes, in the order played
+  const fingers = useMemo(
+    () =>
+      melody
+        ? {
+            right: getMelodyFingering(
+              steps.map((s) => s.midi),
+              'right'
+            ),
+            left: getMelodyFingering(
+              steps.map((s) => s.midi),
+              'left'
+            ),
+          }
+        : getFingers(scale, steps),
+    [melody, scale, steps]
+  );
 
   const { requiredCleanRuns } = quizSettings;
 
   const relative = useMemo(
-    () => (quizSettings.displayRelative ? getRelativeScale(scale) : null),
-    [quizSettings.displayRelative, scale]
+    () => (quizSettings.displayRelative && !melody ? getRelativeScale(scale) : null),
+    [quizSettings.displayRelative, melody, scale]
   );
 
   // a finished scale is announced for a moment, with the scale that follows
@@ -96,10 +119,11 @@ const ScaleQuiz: React.FC = () => {
         }
       : null;
 
-  const sequenceLength = useMemo(
-    () => getScaleSequence(quizSettings.scales, quizSettings.tonics === 'natural').length,
-    [quizSettings.scales, quizSettings.tonics]
-  );
+  // keys from C to B (melodies are all in major keys)
+  const sequenceLength = useMemo(() => {
+    if (quizSettings.practice === 'melodies') return quizSettings.tonics === 'natural' ? 7 : 12;
+    return getScaleSequence(quizSettings.scales, quizSettings.tonics === 'natural').length;
+  }, [quizSettings.practice, quizSettings.scales, quizSettings.tonics]);
 
   return (
     <div id="ScaleQuiz" className={cx('base', { 'base--learning': quizSettings.learningMode })}>
@@ -137,16 +161,25 @@ const ScaleQuiz: React.FC = () => {
         </Button>
       </div>
 
-      <div className={cx('scaleName')} key={scale.id}>
-        {scale.label}
+      <div className={cx('scaleName')} key={melody ? `${melody.id}-${scale.id}` : scale.id}>
+        {melody ? melody.title : scale.label}
       </div>
+      {melody && (
+        <div className={cx('relative')} key={`key-${melody.id}-${scale.id}`}>
+          {melody.subtitle}
+        </div>
+      )}
       {relative && (
         <div className={cx('relative')} key={`relative-${scale.id}`}>
           Relative: {relative.label}
         </div>
       )}
       <div className={cx('instruction')}>
-        Play the scale {DIRECTIONS[quizSettings.direction]}, one note at a time
+        {melody
+          ? `Play the ${solo ? 'phrase' : 'melody'}, one note at a time${
+              solo ? ' (over your backing track)' : ''
+            }`
+          : `Play the scale ${DIRECTIONS[quizSettings.direction]}, one note at a time`}
         {requiredCleanRuns > 0 &&
           ` · ${requiredCleanRuns} perfect run${requiredCleanRuns > 1 ? 's' : ''} in a row`}
       </div>
@@ -163,10 +196,13 @@ const ScaleQuiz: React.FC = () => {
         fingers={fingers}
         compact={quizSettings.learningMode}
         runs={runs}
+        sequential={!!melody}
       />
 
       {quizSettings.learningMode && (
         <ScaleQuizKeyboard
+          scaleKeys={soloKeys}
+          sequential={!!melody}
           steps={steps}
           position={position}
           keySignature={keySignature}
@@ -182,8 +218,11 @@ const ScaleQuiz: React.FC = () => {
 
       <div className={cx('playedContainer')}>
         <div className={cx('progress')}>
-          Scale {(state.completed % SCALES_PER_GAME) + 1} / {SCALES_PER_GAME}
-          {quizSettings.mode === 'sequential' &&
+          {solo && `Phrase ${state.completed + 1}`}
+          {!solo && (melody ? 'Song ' : 'Scale ')}
+          {!solo && `${(state.completed % SCALES_PER_GAME) + 1} / ${SCALES_PER_GAME}`}
+          {!solo &&
+            quizSettings.mode === 'sequential' &&
             ` · C to B ${(state.sequenceIndex % sequenceLength) + 1} / ${sequenceLength}`}
           {` · ${state.mistakes} mistake${state.mistakes === 1 ? '' : 's'}`}
         </div>

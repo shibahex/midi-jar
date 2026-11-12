@@ -4,9 +4,15 @@ import { STATUSES } from 'renderer/hooks/useQuiz';
 import { ScaleQuizSettings } from 'main/types';
 import {
   clampOctaveShift,
+  generateSoloPhrase,
+  getBestScaleForChroma,
+  getIncludedMelodies,
+  getMelodyNotes,
   getRandomScale,
+  getScaleInfo,
   getScaleInSequence,
   isSamePitchClass,
+  randomPick,
   ScaleInfo,
 } from 'renderer/helpers';
 import { addScore, NO_FEEDBACK, QuizFeedback, ScoreGame } from 'renderer/helpers/quiz';
@@ -66,6 +72,11 @@ export type State = {
   octaveShift: number;
   /** last scale finished and the scale that follows, shown for a moment */
   transition: { id: number; from: string; to: string } | null;
+  /**
+   * the melody played (melodies, or a solo phrase), in the key of `scale`:
+   * shown as `title` and `subtitle`, announced as `name` when done
+   */
+  melody: { id: string; title: string; subtitle: string; name: string } | null;
 };
 
 /**
@@ -105,12 +116,90 @@ export function buildSteps(scale: ScaleInfo, direction: ScaleQuizSettings['direc
   return up;
 }
 
+const NATURAL_CHROMAS = [0, 2, 4, 5, 7, 9, 11];
+const ALL_CHROMAS = Array.from({ length: 12 }, (_, chroma) => chroma);
+
+/**
+ * A melody in a major key: random, in order from C to B, or the current key
+ */
+function newMelody(
+  options: ScaleQuizSettings,
+  key: string,
+  sequenceIndex: number,
+  previousMelody: string | null
+) {
+  const chromas = options.tonics === 'natural' ? NATURAL_CHROMAS : ALL_CHROMAS;
+  let scale: ScaleInfo;
+  if (options.mode === 'randomInKey') scale = getScaleInfo(key, 'major');
+  else if (options.mode === 'sequential')
+    scale = getBestScaleForChroma(chromas[sequenceIndex % chromas.length], 'major');
+  else scale = getBestScaleForChroma(randomPick(chromas), 'major');
+
+  // not the same melody twice in a row
+  const melodies = getIncludedMelodies(options.excludedMelodies);
+  const melody = randomPick(
+    melodies.length > 1 ? melodies.filter((m) => m.id !== previousMelody) : melodies
+  );
+
+  const steps: Step[] = getMelodyNotes(melody, scale.tonic).map((n, upIndex) => ({
+    ...n,
+    upIndex,
+  }));
+  return {
+    scale,
+    steps,
+    sequenceIndex,
+    melody: {
+      id: melody.id,
+      title: melody.title,
+      subtitle: `in ${scale.label}`,
+      name: melody.title,
+    },
+  };
+}
+
+/**
+ * A random phrase in the key and scale of the backing track
+ *
+ * @param phrase - number of the phrase, from 0
+ */
+function newSoloPhrase(options: ScaleQuizSettings, key: string, phrase: number) {
+  const type = options.soloScale || 'minor pentatonic';
+  const scale =
+    options.soloKey === 'current'
+      ? getScaleInfo(key, type)
+      : getBestScaleForChroma(Number(options.soloKey ?? 9), type);
+
+  const steps: Step[] = generateSoloPhrase(scale, options.soloLength ?? 'medium').map(
+    (n, upIndex) => ({ ...n, upIndex })
+  );
+  return {
+    scale,
+    steps,
+    sequenceIndex: phrase,
+    melody: {
+      id: `solo-${phrase}`,
+      title: scale.label,
+      subtitle: `Solo · phrase ${phrase + 1}`,
+      name: `Phrase ${phrase + 1}`,
+    },
+  };
+}
+
 function newScale(
   options: ScaleQuizSettings,
   key: string,
   previous: ScaleInfo | null,
-  sequenceIndex: number
+  sequenceIndex: number,
+  previousMelody: string | null = null
 ) {
+  if (options.practice === 'melodies') {
+    return newMelody(options, key, sequenceIndex, previousMelody);
+  }
+  if (options.practice === 'solo') {
+    return newSoloPhrase(options, key, sequenceIndex);
+  }
+
   const naturalOnly = options.tonics === 'natural';
   const scale =
     options.mode === 'sequential'
@@ -121,7 +210,7 @@ function newScale(
           previous,
           naturalOnly
         );
-  return { scale, steps: buildSteps(scale, options.direction), sequenceIndex };
+  return { scale, steps: buildSteps(scale, options.direction), sequenceIndex, melody: null };
 }
 
 export function init({ options, key }: { options: ScaleQuizSettings; key: string }): State {
@@ -164,7 +253,12 @@ export function reducer(state: State, action: Action): State {
         options.scales === state.options.scales &&
         options.mode === state.options.mode &&
         options.tonics === state.options.tonics &&
-        options.direction === state.options.direction;
+        options.direction === state.options.direction &&
+        options.practice === state.options.practice &&
+        options.soloKey === state.options.soloKey &&
+        options.soloScale === state.options.soloScale &&
+        options.soloLength === state.options.soloLength &&
+        (options.excludedMelodies ?? []).join() === (state.options.excludedMelodies ?? []).join();
 
       // display options do not restart the current scale
       if (sameScales) {
@@ -182,7 +276,13 @@ export function reducer(state: State, action: Action): State {
     case 'SKIP':
       return {
         ...state,
-        ...newScale(state.options, state.key, state.scale, state.sequenceIndex + 1),
+        ...newScale(
+          state.options,
+          state.key,
+          state.scale,
+          state.sequenceIndex + 1,
+          state.melody?.id
+        ),
         position: 0,
         mistakes: 0,
         positionMistakes: 0,
@@ -211,7 +311,8 @@ export function reducer(state: State, action: Action): State {
         return { ...state, acceptedMidi };
       }
 
-      if (!correct && state.options.jumpBack) {
+      // melodies go back and forth: no jumping back, a wrong note is a mistake
+      if (!correct && state.options.jumpBack && !state.melody) {
         // Find the closest earlier step with this note, in the direction being played
         // (a wrong note on the way down does not go back to the way up)
         const start = getDirectionStart(state.steps, state.position);
@@ -318,12 +419,22 @@ export function reducer(state: State, action: Action): State {
         games = [...games, { score: 0 }];
       }
 
-      const next = newScale(state.options, state.key, state.scale, state.sequenceIndex + 1);
+      const next = newScale(
+        state.options,
+        state.key,
+        state.scale,
+        state.sequenceIndex + 1,
+        state.melody?.id
+      );
 
       return {
         ...state,
         ...next,
-        transition: { id: completed, from: state.scale.label, to: next.scale.label },
+        transition: {
+          id: completed,
+          from: state.melody?.name ?? state.scale.label,
+          to: next.melody?.name ?? next.scale.label,
+        },
         eventCount,
         lastPlayed,
         lastAccepted: step.note,

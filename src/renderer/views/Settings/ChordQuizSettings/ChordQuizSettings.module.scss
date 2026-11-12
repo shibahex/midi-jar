@@ -15,32 +15,6 @@
   border-radius: 2px;
 }
 
-// chords of a set that can be left out
-.chord--toggle {
-  border: 1px solid $color-primary-normal;
-  color: inherit;
-  font: inherit;
-  cursor: pointer;
-
-  &:disabled {
-    cursor: default;
-  }
-}
-
-.chord--off {
-  border-color: transparent;
-  background: transparent;
-  text-decoration: line-through;
-  opacity: 0.5;
-}
-
-.chordHint {
-  margin-top: 4px;
-  font-size: 0.85em;
-  text-align: center;
-  opacity: 0.6;
-}
-
 // custom progressions, one per line
 .customProgressions {
   width: 100%;
@@ -78,5 +52,74 @@
       content: '✗ ';
       color: $color-danger-light;
     }
+  }
+}
+
+// imported songs
+.import {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.importUrl {
+  display: flex;
+  width: 100%;
+  gap: 6px;
+
+  > :first-child {
+    flex: 1;
+    min-width: 0;
+  }
+
+  > button {
+    flex-shrink: 0;
+  }
+}
+
+.importMessage {
+  font-size: 0.85em;
+  color: $color-success-light;
+
+  &--error {
+    color: $color-danger-light;
+  }
+}
+
+.importedSongs {
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+
+  li {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+  }
+
+  small {
+    opacity: 0.6;
+  }
+}
+
+.songTempo {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.8em;
+  opacity: 0.85;
+
+  input {
+    width: 4.5em;
+    padding: 2px 4px;
+    border: 1px solid $color-neutral-normal;
+    border-radius: 3px;
+    background: transparent;
+    color: inherit;
+    font: inherit;
   }
 }

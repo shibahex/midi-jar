@@ -7,6 +7,7 @@ export function getModuleOutputs() {
     'chord-quiz',
     'scale-quiz',
     'scale-degrees',
+    'rhythm-game',
     'circle-of-fifths',
     'debugger',
   ];

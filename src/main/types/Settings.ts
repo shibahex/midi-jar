@@ -43,6 +43,28 @@ export type ChordDisplaySettings = {
 /** Hands to display finger numbers for, in learning modes */
 export type Fingering = 'right' | 'left' | 'both' | 'none';
 
+/** A song imported from a ChordPro file or a chord sheet */
+export type ImportedSong = {
+  id: string;
+  title: string;
+  /** key of the song, e.g. "G" or "Em" (from the file, or the first chord) */
+  key: string;
+  /** chord names in order, e.g. ["G", "Em7", "C", "D"] */
+  chords: string[];
+  /** length of each chord in beats (from bar lines), one bar each if not given */
+  beats?: number[];
+  /** beats in a bar (time signature: 3 for 3/4) */
+  beatsPerBar?: number;
+  /** tempo of the song (beats per minute) */
+  bpm?: number;
+  /** the song's own rhythm: a chord is played every N beats (from the strumming) */
+  beatsPerHit?: number;
+  /** web address the song was imported from (to import it again) */
+  url?: string;
+  /** parts of the song (verse, chorus...): their name and the index of their first chord */
+  sections?: { name: string; start: number }[];
+};
+
 /** Tonics asked in quizzes: every key, or natural keys only (no sharp or flat) */
 export type Tonics = 'all' | 'natural';
 
@@ -50,7 +72,8 @@ export type Tonics = 'all' | 'natural';
 export type ChordSet = 'majorMinor' | 'triads' | 'sevenths' | 'ninths' | 'triadsSevenths' | 'all';
 
 export type ChordQuizSettings = {
-  mode: 'random' | 'randomInKey' | 'progressions';
+  /** "rhythm" is from before the Rhythm Game had its own module (read as "random") */
+  mode: 'random' | 'randomInKey' | 'progressions' | 'rhythm';
   chords: ChordSet;
   /** chords of the set left out (tonal names, e.g. "m" or "dim") */
   excludedChords: string[];
@@ -75,6 +98,33 @@ export type ChordQuizSettings = {
   customProgressions: string;
 };
 
+export type RhythmGameSettings = {
+  /** beats per minute */
+  tempo: number;
+  /** chords played in the rhythm of the song, once per bar, twice, or on every beat */
+  pattern: 'song' | 'bar' | 'half' | 'beat';
+  /** songs with a tempo of their own (imported) are played at it */
+  songTempo: boolean;
+  /** songs left out (ids) */
+  excludedSongs: string[];
+  /** the song to play (id), or "" for a random song */
+  song: string;
+  /** songs imported from chord sheets or web pages (chords in their key) */
+  customSongs: ImportedSong[];
+  /** the song name is shown from the start, or revealed at the end */
+  showTitle: 'start' | 'end';
+  /** the song speeds up (5% every 4 hits in a row, up to 1.5 times) */
+  speedUp: boolean;
+  /** key of the built-in songs: random, or the current key (notation settings) */
+  songKey: 'random' | 'current';
+  tonics: Tonics;
+  learningMode: boolean;
+  fingering: Fingering;
+  /** learning mode: on a miss, keep going, wait for the chord, or slow down */
+  onMiss: 'continue' | 'wait' | 'slowDown';
+  gamification: boolean;
+};
+
 export type ScaleSet =
   | 'major'
   | 'minor'
@@ -85,6 +135,16 @@ export type ScaleSet =
   | 'all';
 
 export type ScaleQuizSettings = {
+  /** play scales, melodies of songs, or random solo phrases (over a backing track) */
+  practice: 'scales' | 'melodies' | 'solo';
+  /** solo: key, as a chroma ("0" = C ... "11" = B) or "current" (notation settings) */
+  soloKey: string;
+  /** solo: scale the phrases are made of (tonal name, e.g. "minor pentatonic") */
+  soloScale: string;
+  /** solo: number of notes of a phrase */
+  soloLength: 'short' | 'medium' | 'long';
+  /** melodies left out (ids) */
+  excludedMelodies: string[];
   mode: 'random' | 'randomInKey' | 'sequential';
   tonics: Tonics;
   scales: ScaleSet;
@@ -162,6 +222,7 @@ export type Settings = {
   chordQuiz: ChordQuizSettings;
   scaleQuiz: ScaleQuizSettings;
   scaleDegrees: ScaleDegreesSettings;
+  rhythmGame: RhythmGameSettings;
   circleOfFifths: CircleOfFifthsSettings;
   chordDictionary: ChordDictionarySettings;
   notation: NotationSettings;

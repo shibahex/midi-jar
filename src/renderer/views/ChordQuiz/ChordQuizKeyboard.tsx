@@ -1,10 +1,15 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Interval, Note } from 'tonal';
+import { Note } from 'tonal';
 import { Chord as TChord } from '@tonaljs/chord';
 
 import { Fingering } from 'main/types';
 import { FingerMark, FingerRow, HandChip, KeyLegend, LearningKeyboard } from 'renderer/components';
-import { getChordFingering, getFingeringHands, getKeySignatureSpelledLike } from 'renderer/helpers';
+import {
+  getChordFingering,
+  getChordVoicing,
+  getFingeringHands,
+  getKeySignatureSpelledLike,
+} from 'renderer/helpers';
 
 import { getChordOctaveShift } from './utils';
 
@@ -37,8 +42,9 @@ const ChordQuizKeyboard: React.FC<Props> = ({
   const [octaveShift, setOctaveShift] = useState(0);
 
   const baseChordMidi = useMemo(() => {
+    // a voicing one hand can play (big chords leave out the 5th, the 11th...)
     const tonicMidi = 60 + (Note.chroma(target.tonic ?? 'C') ?? 0);
-    return target.intervals.map((interval) => tonicMidi + (Interval.semitones(interval) ?? 0));
+    return getChordVoicing(target.intervals).map((semitones) => tonicMidi + semitones);
   }, [target]);
 
   useEffect(() => {

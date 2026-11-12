@@ -44,7 +44,8 @@ MIDI Jar includes:
 - A Circle of Fifths highly customizatble
 - A Chord Quiz module, with different modes and settings to train
 - A Scale Quiz module, to learn scales with a keyboard and fingering
-- A Learning Mode for both quizzes, showing the keys to play and the fingering
+- A Rhythm Game, to play the chords of songs in time (built-in songs, or imported from chord sheets and Ultimate Guitar)
+- A Learning Mode for the quizzes and the Rhythm Game, showing the keys to play and the fingering
 - A HTTP/Websocket server to include modules externally (in OBS Browser source for instance)
 - Running at startup
 - Running in background (no window, only Tray icon)
@@ -358,6 +359,18 @@ Hopefully in the future, this module will be able to have an "Intelligent" mode 
 [MIDI Jar - Chord Quiz example](https://user-images.githubusercontent.com/1231011/233844786-4f182b44-fcb8-4d24-b69d-532c6286f61e.mp4)
 
 
+## Rhythm Game
+
+Play along a song: its chords scroll toward a hit line in time with the beat (after a count-in). Play each one as it reaches the line for a Perfect, a Good or a Miss, with combos. The built-in songs are Pachelbel's Canon, House of the Rising Sun, Greensleeves, When the Saints Go Marching In, Amazing Grace and a 12-bar blues, in a random key or the current key.
+
+- `Pattern`: chords follow the song's own rhythm (how long each chord lasts, its time signature like the 3/4 of Amazing Grace, the strumming of Ultimate Guitar songs), or a fixed pattern: once per bar, twice, or on every beat (release the keys between repeated chords)
+- `Tempo`: beats per minute, or `Song's Tempo` to play imported songs at their own tempo. With `Speed Up`, the song gets 5% faster every 4 chords in a row, up to 1.5 times the tempo
+- `Song Name`: shown from the start, or kept a mystery until the end
+- `Learning Mode`: a keyboard with the keys and fingering of the next chord, and what happens on a miss: keep going, wait until the missed chord is played, or slow the song down (it speeds back up after 4 hits in a row)
+- `Import Songs`: from ChordPro files (`.cho`, `.chordpro`, `.chopro`, `.pro`, `.crd`, with `[Am]` chords and `{title:}` / `{key:}` / `{tempo:}` / `{time:}`), chord sheets (`.txt`, lines of chords above the lyrics, Ultimate Guitar `[ch]` tags, bar lines like `| C G | Am | % |` for how long chords last), or the web address of a song: a Songsterr song (the chords are found from the notes of its rhythm guitar and bass, with the real tempo, time signature, timing and sections), an Ultimate Guitar chords page with its tempo and strumming, or another chord site. Songs are played in their own key with their numerals, a bar per chord unless bar lines tell otherwise. Importing a song again replaces it. Type a song's tempo in the list if it has none (Ultimate Guitar only gives one with a strumming pattern)
+- `Song`: play one song (also picked on the game screen), or random songs among the ones left in
+- Big chords (9ths, 11ths, 13ths) are shown in a voicing one hand can play: the 5th, then the 11th are left out, and the notes are packed within an octave. Only those notes are needed for a hit
+
 ## Scale Quiz
 
 https://github.com/user-attachments/assets/79e10d36-a1fd-4e74-b41e-3aac776a5d1a
@@ -365,6 +378,12 @@ https://github.com/user-attachments/assets/79e10d36-a1fd-4e74-b41e-3aac776a5d1a
 You can learn scales by using the Scale Quiz module.
 
 A scale is asked, and you must play its notes one at a time, in any octave. Each right note scores points, a wrong note loses some, and playing the whole scale without a mistake gives a bonus that grows with your streak of perfect scales.
+
+You can also practice **melodies** instead of scales (`Practice: Melodies`): the notes of a song are shown in order with their degrees, in any key (random, in order, or the current key). The songs are in the public domain: Ode to Joy, Twinkle Twinkle Little Star, Mary Had a Little Lamb, Frère Jacques, Amazing Grace and When the Saints Go Marching In, and you can leave some out.
+
+To **solo over a backing track** (from YouTube for instance), choose `Practice: Solo phrases`, then the key and scale of the track (minor or major pentatonic, blues, major, natural minor, dorian, mixolydian, harmonic minor) and the length of the phrases. Random phrases of that scale are given one after the other, moving mostly by step and ending on the tonic or the fifth; with `Learning Mode`, the keyboard shows every key of the scale and the next note to play.
+
+With `Learning Mode`, melodies and solo phrases also show a recommended finger for each note (in the note boxes, and on the next key of the keyboard), chosen to keep the hand in position, cross the thumb only when needed and avoid the thumb on black keys.
 
 You can choose which scales are asked:
 

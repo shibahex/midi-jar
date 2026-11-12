@@ -228,3 +228,34 @@ ipcMain.handle('app:server:enable', async (_event, enabled: boolean) => {
 ipcMain.on('app:server:getState', (event) => {
   event.reply('app:server:state', getServerState());
 });
+
+/* WEB PAGES */
+
+const PAGE_USER_AGENT =
+  'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36';
+const MAX_PAGE_SIZE = 10 * 1024 * 1024;
+
+/** Fetches a web page (a song's chords), from the main process to avoid cross-site limits */
+ipcMain.handle('app:fetchPage', async (_event, url: string) => {
+  const { protocol } = new URL(url);
+  if (protocol !== 'https:' && protocol !== 'http:') throw new Error('Not a web address');
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 15000);
+  try {
+    const response = await fetch(url, {
+      // like a browser (some sites refuse requests without a language)
+      headers: {
+        'User-Agent': PAGE_USER_AGENT,
+        Accept: '*/*',
+        'Accept-Language': 'en-US,en;q=0.9',
+      },
+      signal: controller.signal,
+    });
+    if (!response.ok) throw new Error(`The page could not be loaded (error ${response.status})`);
+    const text = await response.text();
+    return text.slice(0, MAX_PAGE_SIZE);
+  } finally {
+    clearTimeout(timeout);
+  }
+});

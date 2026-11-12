@@ -15,6 +15,7 @@ import ChordDisplay from './views/ChordDisplay';
 import ChordQuiz from './views/ChordQuiz';
 import ScaleQuiz from './views/ScaleQuiz';
 import ScaleDegrees from './views/ScaleDegrees';
+import RhythmGame from './views/RhythmGame';
 import CircleOfFifths from './views/CircleOfFifths';
 
 import settingsRoutes from './views/Settings';
@@ -22,6 +23,7 @@ import CircleOfFifthsSettings from './views/Settings/CircleOfFifthsSettings';
 import ChordQuizSettings from './views/Settings/ChordQuizSettings';
 import ScaleQuizSettings from './views/Settings/ScaleQuizSettings';
 import ScaleDegreesSettings from './views/Settings/ScaleDegreesSettings';
+import RhythmGameSettings from './views/Settings/RhythmGameSettings';
 
 import packageJSON from '../../package.json';
 import icon from '../../assets/icon.svg';
@@ -106,6 +108,18 @@ const router = createHashRouter(
         }
       >
         <Route path="settings" element={<ScaleDegreesSettings />} />
+      </Route>
+      <Route
+        path="rhythm-game"
+        handle={{ title: 'Rhythm Game', icon: <Icon name="music" />, hasSettings: true }}
+        element={
+          <MidiMessageManagerProvider namespace="rhythm-game" source="internal">
+            <RhythmGame />
+            <DrawerOutlet aria-label="Rhythm Game Settings" placement="right" size="lg" />
+          </MidiMessageManagerProvider>
+        }
+      >
+        <Route path="settings" element={<RhythmGameSettings />} />
       </Route>
       <Route
         path="chord-dictionary"

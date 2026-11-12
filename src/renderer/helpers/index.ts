@@ -9,3 +9,7 @@ export * from './chords';
 export * from './scales';
 export * from './fingering';
 export * from './progressions';
+export * from './melodies';
+export * from './songs';
+export * from './solo';
+export * from './songsterr';

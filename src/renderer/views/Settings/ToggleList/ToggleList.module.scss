@@ -1,0 +1,38 @@
+@import 'tokens';
+
+.list {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+}
+
+.item {
+  padding: 2px 4px;
+  border-radius: 2px;
+  border: 1px solid $color-primary-normal;
+  background: $color-neutral-dark;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+
+  &:disabled {
+    cursor: default;
+  }
+
+  &--off {
+    border-color: transparent;
+    background: transparent;
+    text-decoration: line-through;
+    opacity: 0.5;
+  }
+}
+
+.hint {
+  margin-top: 4px;
+  font-size: 0.85em;
+  text-align: center;
+  opacity: 0.6;
+}

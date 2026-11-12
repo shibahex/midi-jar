@@ -18,6 +18,7 @@ const registerListener =
 
 export const AppApi = {
   quit: () => ipcRenderer.send('app:quit'),
+  fetchPage: (url: string): Promise<string> => ipcRenderer.invoke('app:fetchPage', url),
   settings: {
     clear: () => ipcRenderer.send('app:settings:clear'),
     reset: (key: keyof Settings) => ipcRenderer.invoke('app:settings:reset', key),

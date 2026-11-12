@@ -20,7 +20,8 @@ import {
   v1_7_0_ChordDisplaySettings,
   v1_7_0_Settings,
 } from './legacy-types';
-import { Settings } from '../types/Settings';
+import { RhythmGameSettings, Settings } from '../types/Settings';
+import { defaultRhythmGameSettings } from './defaults';
 
 const migrations: Migrations<StoreType> = {
   '1.0.0': (store: Conf<StoreType>) => {
@@ -353,7 +354,7 @@ const migrations: Migrations<StoreType> = {
 
     // dev builds may have saved part of the new settings: keep what is there
     const settings = store.get('settings') as unknown as v1_7_0_Settings &
-      Partial<Pick<Settings, 'scaleQuiz' | 'scaleDegrees'>>;
+      Partial<Pick<Settings, 'scaleQuiz' | 'scaleDegrees' | 'rhythmGame'>>;
 
     const newSettings: Settings = {
       ...settings,
@@ -371,7 +372,13 @@ const migrations: Migrations<StoreType> = {
         customProgressions: '',
         ...settings.chordQuiz,
       },
+      rhythmGame: settings.rhythmGame ?? defaultRhythmGameSettings,
       scaleQuiz: {
+        practice: 'scales',
+        soloKey: '9',
+        soloScale: 'minor pentatonic',
+        soloLength: 'medium',
+        excludedMelodies: [],
         mode: 'random',
         tonics: 'all',
         scales: 'majorMinor',
@@ -407,3 +414,72 @@ const migrations: Migrations<StoreType> = {
 };
 
 export default migrations;
+
+/** Rhythm game settings, as they were in the chord quiz (development builds of 1.8.0) */
+type ChordQuizRhythmSettings = {
+  mode?: string;
+  tempo?: number;
+  rhythmPattern?: RhythmGameSettings['pattern'];
+  rhythmSongTempo?: boolean;
+  excludedSongs?: string[];
+  customSongs?: RhythmGameSettings['customSongs'];
+  rhythmShowTitle?: RhythmGameSettings['showTitle'];
+  rhythmSpeedUp?: boolean;
+  rhythmOnMiss?: RhythmGameSettings['onMiss'];
+  progressionKey?: RhythmGameSettings['songKey'];
+  tonics?: RhythmGameSettings['tonics'];
+  learningMode?: boolean;
+  fingering?: RhythmGameSettings['fingering'];
+  gamification?: boolean;
+};
+
+/**
+ * The rhythm game moved from the chord quiz to its own module: its settings are moved
+ * (on every start, as builds of the same version may not have them yet)
+ */
+export function upgradeSettings(store: Conf<StoreType>) {
+  // MIDI devices routed to the chord quiz are also routed to the rhythm game
+  const routes = (store.get('midi.routes') ?? []) as { input: string; output: string }[];
+  const missing = routes.filter(
+    (route) =>
+      route.output === 'chord-quiz' &&
+      !routes.some((r) => r.input === route.input && r.output === 'rhythm-game')
+  );
+  if (missing.length) {
+    store.set('midi.routes', [
+      ...routes,
+      ...missing.map((route) => ({ ...route, output: 'rhythm-game' })),
+    ]);
+  }
+
+  const settings = store.get('settings') as Settings;
+  const chordQuiz = settings.chordQuiz as Settings['chordQuiz'] & ChordQuizRhythmSettings;
+  if (settings.rhythmGame && chordQuiz.mode !== 'rhythm') return;
+
+  const wasRhythm = chordQuiz.mode === 'rhythm';
+  const rhythmGame: RhythmGameSettings = settings.rhythmGame ?? {
+    ...defaultRhythmGameSettings,
+    tempo: chordQuiz.tempo ?? defaultRhythmGameSettings.tempo,
+    pattern: chordQuiz.rhythmPattern ?? defaultRhythmGameSettings.pattern,
+    songTempo: chordQuiz.rhythmSongTempo ?? false,
+    excludedSongs: chordQuiz.excludedSongs ?? [],
+    customSongs: chordQuiz.customSongs ?? [],
+    showTitle: chordQuiz.rhythmShowTitle ?? 'start',
+    speedUp: chordQuiz.rhythmSpeedUp ?? false,
+    onMiss: chordQuiz.rhythmOnMiss ?? 'continue',
+    // the quiz options that applied to the rhythm game
+    ...(wasRhythm && {
+      songKey: chordQuiz.progressionKey ?? 'random',
+      tonics: chordQuiz.tonics ?? 'all',
+      learningMode: chordQuiz.learningMode ?? false,
+      fingering: chordQuiz.fingering ?? 'right',
+      gamification: chordQuiz.gamification ?? true,
+    }),
+  };
+
+  store.set('settings', {
+    ...settings,
+    chordQuiz: { ...settings.chordQuiz, mode: wasRhythm ? 'random' : settings.chordQuiz.mode },
+    rhythmGame,
+  });
+}

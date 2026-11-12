@@ -53,6 +53,20 @@ export const getStepBoxes = (steps: Step[], position: number) => {
   return { boxes, goingDown, showDirection: turnsAround || goingDown };
 };
 
+/** A box per note, in the order they are played (melodies) */
+export const getSequentialBoxes = (steps: Step[], position: number) => ({
+  boxes: steps.map(
+    (step, index): StepBox => ({
+      step,
+      current: index === position,
+      done: index < position,
+      passed: false,
+    })
+  ),
+  goingDown: false,
+  showDirection: false,
+});
+
 /**
  * Fingers for each note of the ascending octave, indexed by `Step.upIndex`
  */

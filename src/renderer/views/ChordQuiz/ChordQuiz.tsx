@@ -13,7 +13,7 @@ import styles from './ChordQuiz.module.scss';
 
 const cx = classnames.bind(styles);
 
-const ChordQuiz: React.FC = () => {
+const ChordQuizGame: React.FC = () => {
   const { settings } = useSettings();
 
   const quizSettings = settings.chordQuiz;
@@ -187,4 +187,4 @@ const ChordQuiz: React.FC = () => {
   );
 };
 
-export default ChordQuiz;
+export default ChordQuizGame;

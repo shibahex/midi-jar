@@ -17,6 +17,7 @@ import CircleOfFifthsSettings from './CircleOfFifthsSettings';
 import ChordQuizSettings from './ChordQuizSettings';
 import ScaleQuizSettings from './ScaleQuizSettings';
 import ScaleDegreesSettings from './ScaleDegreesSettings';
+import RhythmGameSettings from './RhythmGameSettings';
 import About from './About';
 import Licenses from './Licenses';
 
@@ -41,6 +42,7 @@ export const settingsRoutes = () => (
     <Route path="quiz" element={<ChordQuizSettings />} />
     <Route path="scale-quiz" element={<ScaleQuizSettings />} />
     <Route path="scale-degrees" element={<ScaleDegreesSettings />} />
+    <Route path="rhythm-game" element={<RhythmGameSettings />} />
     <Route path="chord-dictionary" element={<ChordDictionarySettings />} />
     <Route path="chords" element={<ChordDisplaySettings />}>
       <Route

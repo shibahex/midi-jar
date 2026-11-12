@@ -301,10 +301,12 @@
                     "type": "boolean"
                 },
                 "mode": {
+                    "description": "\"rhythm\" is from before the Rhythm Game had its own module (read as \"random\")",
                     "enum": [
                         "progressions",
                         "random",
-                        "randomInKey"
+                        "randomInKey",
+                        "rhythm"
                     ],
                     "type": "string"
                 },
@@ -417,6 +419,158 @@
             },
             "type": "object"
         },
+        "rhythmGame": {
+            "properties": {
+                "customSongs": {
+                    "description": "songs imported from chord sheets or web pages (chords in their key)",
+                    "items": {
+                        "description": "A song imported from a ChordPro file or a chord sheet",
+                        "properties": {
+                            "beats": {
+                                "description": "length of each chord in beats (from bar lines), one bar each if not given",
+                                "items": {
+                                    "type": "number"
+                                },
+                                "type": "array"
+                            },
+                            "beatsPerBar": {
+                                "description": "beats in a bar (time signature: 3 for 3/4)",
+                                "type": "number"
+                            },
+                            "beatsPerHit": {
+                                "description": "the song's own rhythm: a chord is played every N beats (from the strumming)",
+                                "type": "number"
+                            },
+                            "bpm": {
+                                "description": "tempo of the song (beats per minute)",
+                                "type": "number"
+                            },
+                            "chords": {
+                                "description": "chord names in order, e.g. [\"G\", \"Em7\", \"C\", \"D\"]",
+                                "items": {
+                                    "type": "string"
+                                },
+                                "type": "array"
+                            },
+                            "id": {
+                                "type": "string"
+                            },
+                            "key": {
+                                "description": "key of the song, e.g. \"G\" or \"Em\" (from the file, or the first chord)",
+                                "type": "string"
+                            },
+                            "sections": {
+                                "description": "parts of the song (verse, chorus...): their name and the index of their first chord",
+                                "items": {
+                                    "properties": {
+                                        "name": {
+                                            "type": "string"
+                                        },
+                                        "start": {
+                                            "type": "number"
+                                        }
+                                    },
+                                    "type": "object"
+                                },
+                                "type": "array"
+                            },
+                            "title": {
+                                "type": "string"
+                            },
+                            "url": {
+                                "description": "web address the song was imported from (to import it again)",
+                                "type": "string"
+                            }
+                        },
+                        "type": "object"
+                    },
+                    "type": "array"
+                },
+                "excludedSongs": {
+                    "description": "songs left out (ids)",
+                    "items": {
+                        "type": "string"
+                    },
+                    "type": "array"
+                },
+                "fingering": {
+                    "description": "Hands to display finger numbers for, in learning modes",
+                    "enum": [
+                        "both",
+                        "left",
+                        "none",
+                        "right"
+                    ],
+                    "type": "string"
+                },
+                "gamification": {
+                    "type": "boolean"
+                },
+                "learningMode": {
+                    "type": "boolean"
+                },
+                "onMiss": {
+                    "description": "learning mode: on a miss, keep going, wait for the chord, or slow down",
+                    "enum": [
+                        "continue",
+                        "slowDown",
+                        "wait"
+                    ],
+                    "type": "string"
+                },
+                "pattern": {
+                    "description": "chords played in the rhythm of the song, once per bar, twice, or on every beat",
+                    "enum": [
+                        "bar",
+                        "beat",
+                        "half",
+                        "song"
+                    ],
+                    "type": "string"
+                },
+                "showTitle": {
+                    "description": "the song name is shown from the start, or revealed at the end",
+                    "enum": [
+                        "end",
+                        "start"
+                    ],
+                    "type": "string"
+                },
+                "song": {
+                    "description": "the song to play (id), or \"\" for a random song",
+                    "type": "string"
+                },
+                "songKey": {
+                    "description": "key of the built-in songs: random, or the current key (notation settings)",
+                    "enum": [
+                        "current",
+                        "random"
+                    ],
+                    "type": "string"
+                },
+                "songTempo": {
+                    "description": "songs with a tempo of their own (imported) are played at it",
+                    "type": "boolean"
+                },
+                "speedUp": {
+                    "description": "the song speeds up (5% every 4 hits in a row, up to 1.5 times)",
+                    "type": "boolean"
+                },
+                "tempo": {
+                    "description": "beats per minute",
+                    "type": "number"
+                },
+                "tonics": {
+                    "description": "Tonics asked in quizzes: every key, or natural keys only (no sharp or flat)",
+                    "enum": [
+                        "all",
+                        "natural"
+                    ],
+                    "type": "string"
+                }
+            },
+            "type": "object"
+        },
         "scaleDegrees": {
             "properties": {
                 "displayDegreeName": {
@@ -493,6 +647,13 @@
                 "displayRelative": {
                     "type": "boolean"
                 },
+                "excludedMelodies": {
+                    "description": "melodies left out (ids)",
+                    "items": {
+                        "type": "string"
+                    },
+                    "type": "array"
+                },
                 "fingering": {
                     "description": "Hands to display finger numbers for, in learning modes",
                     "enum": [
@@ -520,6 +681,15 @@
                     ],
                     "type": "string"
                 },
+                "practice": {
+                    "description": "play scales, melodies of songs, or random solo phrases (over a backing track)",
+                    "enum": [
+                        "melodies",
+                        "scales",
+                        "solo"
+                    ],
+                    "type": "string"
+                },
                 "requiredCleanRuns": {
                     "type": "number"
                 },
@@ -533,6 +703,23 @@
                         "modes",
                         "pentatonics"
                     ],
+                    "type": "string"
+                },
+                "soloKey": {
+                    "description": "solo: key, as a chroma (\"0\" = C ... \"11\" = B) or \"current\" (notation settings)",
+                    "type": "string"
+                },
+                "soloLength": {
+                    "description": "solo: number of notes of a phrase",
+                    "enum": [
+                        "long",
+                        "medium",
+                        "short"
+                    ],
+                    "type": "string"
+                },
+                "soloScale": {
+                    "description": "solo: scale the phrases are made of (tonal name, e.g. \"minor pentatonic\")",
                     "type": "string"
                 },
                 "tonics": {

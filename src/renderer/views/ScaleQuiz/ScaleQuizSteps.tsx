@@ -5,7 +5,7 @@ import { QuizRuns } from 'renderer/components';
 import { formatSharpsFlats, getDegreeLabel, Hand, ScaleInfo } from 'renderer/helpers';
 
 import { HINT_AFTER_MISTAKES, State, Step } from './reducer';
-import { Fingers, getStepBoxes } from './utils';
+import { Fingers, getSequentialBoxes, getStepBoxes } from './utils';
 
 import styles from './ScaleQuiz.module.scss';
 
@@ -27,11 +27,14 @@ type Props = {
   compact?: boolean;
   /** runs in a row, shown above the notes when several are needed */
   runs?: { done: number; required: number; message: string | null } | null;
+  /** every note in the order played (melodies), instead of one box per note of the scale */
+  sequential?: boolean;
 };
 
 const defaultProps = {
   compact: false,
   runs: null,
+  sequential: false,
 };
 
 /**
@@ -50,16 +53,18 @@ const ScaleQuizSteps: React.FC<Props> = ({
   fingers,
   compact = false,
   runs = null,
+  sequential = false,
 }) => {
   const { boxes, goingDown, showDirection } = useMemo(
-    () => getStepBoxes(steps, position),
-    [steps, position]
+    () => (sequential ? getSequentialBoxes(steps, position) : getStepBoxes(steps, position)),
+    [sequential, steps, position]
   );
 
   // boxes shrink so that long scales stay on one row
   const fontSize = `clamp(14px, min(${compact ? 3.4 : 4.5}vh, 3vw, ${(
     92 /
-    (boxes.length * 3.1)
+    // long melodies wrap on several rows
+    (Math.min(boxes.length, 15) * 3.1)
   ).toFixed(2)}vw), 44px)`;
 
   return (
