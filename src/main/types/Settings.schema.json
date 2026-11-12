@@ -517,10 +517,22 @@
                             "spotify": {
                                 "description": "the song on Spotify, and where its first chord is in the recording (ms, once synced)",
                                 "properties": {
+                                    "durationMs": {
+                                        "type": "number"
+                                    },
                                     "firstChordMs": {
                                         "type": "number"
                                     },
                                     "name": {
+                                        "type": "string"
+                                    },
+                                    "syncedBy": {
+                                        "description": "how the first chord was found: estimated, tapped, or corrected from the playing",
+                                        "enum": [
+                                            "estimate",
+                                            "playing",
+                                            "tap"
+                                        ],
                                         "type": "string"
                                     },
                                     "uri": {

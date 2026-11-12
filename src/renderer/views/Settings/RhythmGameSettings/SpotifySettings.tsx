@@ -4,11 +4,18 @@ import { Button, FormControlLabel, Input, Switch } from '@la-jarre-a-son/ui';
 
 import { useSettings } from 'renderer/contexts/Settings';
 import { Icon } from 'renderer/components';
-import { ImportedSong, SpotifyStatus } from 'main/types';
+import { ImportedSong, SpotifyStatus, SpotifyTrack } from 'main/types';
+import { estimateFirstChordMs } from 'renderer/helpers';
 
 import styles from '../ChordQuizSettings/ChordQuizSettings.module.scss';
 
 const cx = classnames.bind(styles);
+
+const SYNCED_BY = {
+  estimate: 'estimated, corrected as you play',
+  tap: 'set by hand',
+  playing: 'from your playing',
+};
 
 /** Messages of the main process: "Error invoking remote method ...: Error: message" */
 const errorText = (e: unknown) =>
@@ -134,6 +141,19 @@ export const SpotifySongLink: React.FC<{
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
+  // a linked track is synced right away: where the first chord is, estimated
+  const link = async (track: SpotifyTrack) => {
+    const bars = await window.app.spotify.bars(track.uri).catch(() => null);
+    const firstChordMs = estimateFirstChordMs(song, track.durationMs, bars) ?? undefined;
+    onChange({
+      uri: track.uri,
+      name: `${track.name} (${track.artists})`,
+      durationMs: track.durationMs,
+      firstChordMs,
+      syncedBy: firstChordMs !== undefined ? 'estimate' : undefined,
+    });
+  };
+
   const find = async () => {
     setBusy(true);
     setError('');
@@ -143,7 +163,7 @@ export const SpotifySongLink: React.FC<{
       const track =
         (await window.app.spotify.search(query)) ?? (await window.app.spotify.player())?.track;
       if (!track) throw new Error('Not found on Spotify');
-      onChange({ uri: track.uri, name: `${track.name} (${track.artists})` });
+      await link(track);
     } catch (e) {
       setError(errorText(e));
     } finally {
@@ -156,7 +176,7 @@ export const SpotifySongLink: React.FC<{
     try {
       const player = await window.app.spotify.player();
       if (!player) throw new Error('Nothing plays in Spotify');
-      onChange({ uri: player.track.uri, name: `${player.track.name} (${player.track.artists})` });
+      await link(player.track);
     } catch (e) {
       setError(errorText(e));
     }
@@ -164,7 +184,11 @@ export const SpotifySongLink: React.FC<{
 
   const nudge = (ms: number) =>
     song.spotify &&
-    onChange({ ...song.spotify, firstChordMs: Math.max(0, (song.spotify.firstChordMs ?? 0) + ms) });
+    onChange({
+      ...song.spotify,
+      firstChordMs: Math.max(0, (song.spotify.firstChordMs ?? 0) + ms),
+      syncedBy: 'tap',
+    });
 
   if (!song.spotify) {
     return (
@@ -190,6 +214,7 @@ export const SpotifySongLink: React.FC<{
       ) : (
         <span className={cx('spotifyOffset')} title="Where the first chord is in the recording">
           first chord at {(song.spotify.firstChordMs / 1000).toFixed(2)} s
+          {song.spotify.syncedBy && ` (${SYNCED_BY[song.spotify.syncedBy]})`}
           <button type="button" onClick={() => nudge(-50)} title="50 ms earlier">
             −
           </button>

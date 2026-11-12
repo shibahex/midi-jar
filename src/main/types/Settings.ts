@@ -74,7 +74,14 @@ export type ImportedSong = {
   /** notes of the instruments (rhythm guitar, bass, lead, melody), to hear the real song */
   parts?: SongPart[];
   /** the song on Spotify, and where its first chord is in the recording (ms, once synced) */
-  spotify?: { uri: string; name: string; firstChordMs?: number };
+  spotify?: {
+    uri: string;
+    name: string;
+    durationMs?: number;
+    firstChordMs?: number;
+    /** how the first chord was found: estimated, tapped, or corrected from the playing */
+    syncedBy?: 'estimate' | 'tap' | 'playing';
+  };
 };
 
 /** Tonics asked in quizzes: every key, or natural keys only (no sharp or flat) */

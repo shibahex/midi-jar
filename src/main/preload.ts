@@ -39,6 +39,7 @@ export const AppApi = {
     search: (query: string): Promise<SpotifyTrack | null> =>
       ipcRenderer.invoke('spotify:search', query),
     redirectUri: (): Promise<string> => ipcRenderer.invoke('spotify:redirectUri'),
+    bars: (uri: string): Promise<number[] | null> => ipcRenderer.invoke('spotify:bars', uri),
   },
   settings: {
     clear: () => ipcRenderer.send('app:settings:clear'),
