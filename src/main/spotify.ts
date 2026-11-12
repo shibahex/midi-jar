@@ -226,6 +226,7 @@ export async function getPlayer(): Promise<SpotifyPlayer | null> {
     progressMs: data.progress_ms ?? 0,
     // when Spotify measured the progress (ms): about halfway through the request
     measuredAt: asked + (Date.now() - asked) / 2,
+    volumePercent: data.device?.volume_percent ?? null,
     track: toTrack(data.item),
   };
 }
@@ -238,6 +239,12 @@ export const play = (uri: string, positionMs: number) =>
   });
 
 export const pause = () => api('/me/player/pause', { method: 'PUT' });
+
+/** Volume of the Spotify device (Premium) */
+export const setVolume = (percent: number) =>
+  api(`/me/player/volume?volume_percent=${Math.max(0, Math.min(100, Math.round(percent)))}`, {
+    method: 'PUT',
+  });
 
 export const seek = (positionMs: number) =>
   api(`/me/player/seek?position_ms=${Math.max(0, Math.round(positionMs))}`, { method: 'PUT' });

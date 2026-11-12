@@ -19,6 +19,8 @@ export type SpotifyPlayer = {
   isPlaying: boolean;
   progressMs: number;
   measuredAt: number;
+  /** volume of the device playing (null when Spotify does not tell) */
+  volumePercent: number | null;
   track: SpotifyTrack;
 };
 

@@ -39,6 +39,7 @@ export const AppApi = {
     search: (query: string): Promise<SpotifyTrack | null> =>
       ipcRenderer.invoke('spotify:search', query),
     redirectUri: (): Promise<string> => ipcRenderer.invoke('spotify:redirectUri'),
+    volume: (percent: number): Promise<void> => ipcRenderer.invoke('spotify:volume', percent),
     bars: (uri: string): Promise<number[] | null> => ipcRenderer.invoke('spotify:bars', uri),
   },
   settings: {

@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 
 import { useSettings } from 'renderer/contexts/Settings';
-import { synth } from 'renderer/helpers/synth';
+import { InstrumentName, synth } from 'renderer/helpers/synth';
 
 /** a message is sent once per module it is routed to: the same one within this time is ignored */
 const DUPLICATE_MS = 5;
@@ -18,6 +18,11 @@ const SynthMonitor: React.FC = () => {
 
   useEffect(() => synth.setVolume(volume / 100), [volume]);
   useEffect(() => synth.setStyle(style), [style]);
+  const keyboardInstrument = settings.general.keyboardInstrument ?? '';
+  useEffect(
+    () => synth.setChannelInstrument('keyboard', (keyboardInstrument as InstrumentName) || null),
+    [keyboardInstrument]
+  );
 
   useEffect(() => {
     if (!playNotes) return undefined;
