@@ -14,8 +14,10 @@ const SynthMonitor: React.FC = () => {
   const { settings } = useSettings();
   const playNotes = !!settings.general.playNotes;
   const volume = settings.general.soundVolume ?? 70;
+  const style = settings.general.soundStyle ?? 'classical';
 
   useEffect(() => synth.setVolume(volume / 100), [volume]);
+  useEffect(() => synth.setStyle(style), [style]);
 
   useEffect(() => {
     if (!playNotes) return undefined;

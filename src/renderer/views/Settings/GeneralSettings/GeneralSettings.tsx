@@ -12,6 +12,7 @@ import {
   Switch,
   Input,
   FormFieldset,
+  Select,
   Slider,
 } from '@la-jarre-a-son/ui';
 
@@ -81,6 +82,21 @@ const GeneralSettings: React.FC = () => {
             <Switch
               checked={!!settings.general.playNotes}
               onChange={(value) => updateSetting('general.playNotes', value)}
+            />
+          </FormControlLabel>
+
+          <FormControlLabel
+            label="Sound Style"
+            hint="Classical: grand piano, cello, violins and flute in a concert hall. Electric: soft keys, synth bass, lead and voice."
+            reverse
+          >
+            <Select
+              value={settings.general.soundStyle ?? 'classical'}
+              onChange={(value) => updateSetting('general.soundStyle', value)}
+              options={[
+                { value: 'classical', label: 'Classical' },
+                { value: 'electric', label: 'Electric' },
+              ]}
             />
           </FormControlLabel>
 

@@ -113,6 +113,7 @@ export const defaultRhythmGameSettings: RhythmGameSettings = {
   gamification: true,
   sound: 'chords' as const,
   songParts: ['rhythm', 'bass', 'lead', 'melody'] as SongPartRole[],
+  volumes: { chords: 80, rhythm: 70, bass: 75, lead: 65, melody: 80, click: 60 },
   spotifyClientId: '',
   spotifySync: false,
 };
@@ -183,6 +184,7 @@ export const defaults: StoreType = {
       startMinimized: false,
       playNotes: false,
       soundVolume: 70,
+      soundStyle: 'classical' as const,
     },
     chordDisplay: [defaultChordDisplaySettings],
     chordQuiz: defaultChordQuizSettings,

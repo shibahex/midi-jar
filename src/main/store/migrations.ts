@@ -359,7 +359,12 @@ const migrations: Migrations<StoreType> = {
     const newSettings: Settings = {
       ...settings,
       server: settings.server ?? { enabled: true, port: 25011 },
-      general: { playNotes: false, soundVolume: 70, ...settings.general },
+      general: {
+        playNotes: false,
+        soundVolume: 70,
+        soundStyle: 'classical',
+        ...settings.general,
+      },
       chordQuiz: {
         chords: 'all',
         excludedChords: [],

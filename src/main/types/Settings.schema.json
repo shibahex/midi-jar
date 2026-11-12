@@ -391,6 +391,14 @@
                     "description": "built-in sound: the notes played on the MIDI keyboard are heard",
                     "type": "boolean"
                 },
+                "soundStyle": {
+                    "description": "built-in sound: classical (piano, strings, flute) or electric",
+                    "enum": [
+                        "classical",
+                        "electric"
+                    ],
+                    "type": "string"
+                },
                 "soundVolume": {
                     "description": "built-in sound: volume from 0 to 100",
                     "type": "number"
@@ -666,6 +674,30 @@
                         "natural"
                     ],
                     "type": "string"
+                },
+                "volumes": {
+                    "description": "built-in sound: volume of each part, from 0 to 100",
+                    "properties": {
+                        "bass": {
+                            "type": "number"
+                        },
+                        "chords": {
+                            "type": "number"
+                        },
+                        "click": {
+                            "type": "number"
+                        },
+                        "lead": {
+                            "type": "number"
+                        },
+                        "melody": {
+                            "type": "number"
+                        },
+                        "rhythm": {
+                            "type": "number"
+                        }
+                    },
+                    "type": "object"
                 }
             },
             "type": "object"
