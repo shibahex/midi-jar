@@ -16,14 +16,17 @@ import { Icon, InputNumber, ScrollContainer } from 'renderer/components';
 import {
   getAllSongs,
   getIncludedSongs,
-  getSongsterrTrackUrls,
+  getSongsterrSearchUrl,
+  getSongsterrTracks,
   isSongsterrUrl,
   parseChordSheet,
   parseSongPage,
   readSongsterrPage,
+  readSongsterrSearch,
+  readSongsterrTrack,
   songFromSongsterr,
 } from 'renderer/helpers';
-import { ImportedSong } from 'main/types';
+import { ImportedSong, SongPartRole } from 'main/types';
 
 import ToggleList, { useExcludedList } from '../ToggleList';
 import { fields } from './constants';
@@ -34,6 +37,14 @@ const cx = classnames.bind(styles);
 
 const NO_ITEMS: string[] = [];
 const NO_SONGS: ImportedSong[] = [];
+
+/** parts of Songsterr songs that can be heard */
+export const PART_LABELS: { id: SongPartRole; label: string }[] = [
+  { id: 'rhythm', label: 'Rhythm guitar' },
+  { id: 'bass', label: 'Bass' },
+  { id: 'lead', label: 'Lead guitar' },
+  { id: 'melody', label: 'Melody (vocals)' },
+];
 
 const SONG_FILES = '.cho,.chordpro,.chopro,.pro,.crd,.txt';
 
@@ -90,16 +101,27 @@ const ImportSongs: React.FC<{ songs: ImportedSong[] }> = ({ songs }) => {
     setLoading(true);
     setMessages([]);
     try {
-      const fullAddress = /^https?:\/\//i.test(address) ? address : `https://${address}`;
+      // a web address, or a song name to find on Songsterr
+      const isAddress = /^https?:\/\//i.test(address) || /^[^\s]+\.[a-z]{2,}(\/|$)/i.test(address);
+      let fullAddress = /^https?:\/\//i.test(address) ? address : `https://${address}`;
+      if (!isAddress) {
+        const found = readSongsterrSearch(
+          await window.app.fetchPage(getSongsterrSearchUrl(address))
+        );
+        if (!found) throw new Error(`no Songsterr song found for "${address}"`);
+        fullAddress = found;
+      }
       const page = await window.app.fetchPage(fullAddress);
       let result: ReturnType<typeof parseSongPage>;
       const songsterr = isSongsterrUrl(fullAddress) ? readSongsterrPage(page) : null;
       if (songsterr) {
-        // Songsterr: the notes of the rhythm guitar and the bass give the chords and timing
+        // Songsterr: the notes of the rhythm guitar, bass, lead and melody, with their timing
         const tracks = await Promise.all(
-          getSongsterrTrackUrls(songsterr).map(async (trackUrl) =>
-            JSON.parse(await window.app.fetchPage(trackUrl))
-          )
+          getSongsterrTracks(songsterr).map(async ({ role, name, url: trackUrl }) => ({
+            role,
+            name,
+            track: readSongsterrTrack(await window.app.fetchPage(trackUrl)),
+          }))
         );
         result = songFromSongsterr(songsterr, tracks, fullAddress);
       } else {
@@ -163,7 +185,7 @@ const ImportSongs: React.FC<{ songs: ImportedSong[] }> = ({ songs }) => {
         <Input
           value={url}
           onChange={setUrl}
-          placeholder="or paste a web address (Songsterr, Ultimate Guitar...)"
+          placeholder="or a web address, or a song name (Songsterr)"
           aria-label="Web address of a song's chords"
           block
         />
@@ -184,7 +206,8 @@ const ImportSongs: React.FC<{ songs: ImportedSong[] }> = ({ songs }) => {
                 {song.title}{' '}
                 <small>
                   ({song.chords.length} chords, key of {song.key}
-                  {song.beatsPerBar && song.beatsPerBar !== 4 ? `, ${song.beatsPerBar}/4` : ''})
+                  {song.beatsPerBar && song.beatsPerBar !== 4 ? `, ${song.beatsPerBar}/4` : ''}
+                  {song.parts?.length ? `, ${song.parts.length} parts` : ''})
                 </small>
               </span>
               <span className={cx('songTempo')} title="Tempo of this song (beats per minute)">
@@ -307,6 +330,25 @@ const RhythmGameSettings: React.FC = () => {
               options={fields.sound.choices}
               onChange={(value) => updateSetting('rhythmGame.sound', value)}
               value={game.sound ?? 'chords'}
+            />
+          </FormField>
+
+          <FormField
+            label="Song Parts"
+            hint="Songsterr songs: the instruments heard, played note for note (the rhythm guitar plays the chords instead of the plain chord sound). Import a Songsterr song again to get its parts."
+          >
+            <ToggleList
+              items={PART_LABELS.map(({ id, label }) => ({ id, label }))}
+              included={game.songParts ?? PART_LABELS.map(({ id }) => id)}
+              onToggle={(id) => {
+                const current = game.songParts ?? PART_LABELS.map((p) => p.id);
+                const next = current.includes(id as SongPartRole)
+                  ? current.filter((role) => role !== id)
+                  : [...current, id as SongPartRole];
+                updateSetting('rhythmGame.songParts', next);
+              }}
+              keepOne={false}
+              hint="Click a part to mute it or hear it again"
             />
           </FormField>
 

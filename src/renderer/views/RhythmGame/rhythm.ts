@@ -1,7 +1,7 @@
 import { Note } from 'tonal';
 import { Chord as TChord } from '@tonaljs/chord';
 
-import { RhythmGameSettings } from 'main/types';
+import { RhythmGameSettings, SongPart, SongPartRole } from 'main/types';
 import { getChordVoicing } from 'renderer/helpers';
 
 /** Timing windows around a hit, in milliseconds */
@@ -32,8 +32,8 @@ export type Hit = {
 /** A chord of a song, lasting a number of beats (a bar if not told) */
 export type RhythmChord = { name: string; numeral: string; chord: TChord; beats?: number };
 
-/** The rhythm of a song: its time signature, and how often its chords are played */
-export type SongRhythm = { beatsPerBar?: number; beatsPerHit?: number };
+/** The rhythm of a song: its time signature, how often its chords are played, its intro */
+export type SongRhythm = { beatsPerBar?: number; beatsPerHit?: number; leadIn?: number };
 
 export const getBeatMs = (tempo: number) => 60000 / tempo;
 
@@ -67,7 +67,8 @@ export function buildHits(
   const beatsPerBar = rhythm.beatsPerBar ?? BEATS_PER_BAR;
   const step = getBeatsPerHit(pattern, rhythm);
 
-  let position = beatsPerBar; // count-in
+  // a bar is counted, then the intro plays before the first chord
+  let position = beatsPerBar + (rhythm.leadIn ?? 0);
   const hits: Omit<Hit, 'id' | 'length'>[] = [];
   const starts: number[] = [];
   chords.forEach(({ name, numeral, chord, beats = beatsPerBar }) => {
@@ -115,3 +116,46 @@ const POINTS: Record<HitResult, number> = { perfect: 300, good: 100, miss: 0 };
 /** Points of a hit: a combo adds 10% per hit in a row, up to double */
 export const getHitPoints = (result: HitResult, combo: number) =>
   Math.round(POINTS[result] * Math.min(2, 1 + combo * 0.1));
+
+/** A note of a song part to play, in milliseconds from the start of the game */
+export type PartEvent = {
+  time: number;
+  duration: number;
+  midi: number;
+  velocity: number;
+  role: SongPartRole;
+};
+
+/**
+ * Notes of the parts of a song (rhythm guitar, bass, lead, melody) in time with the game:
+ * after the bar counted before the song
+ */
+export function buildPartEvents(
+  parts: SongPart[],
+  roles: SongPartRole[],
+  tempo: number,
+  beatsPerBar: number,
+  // a part of the song only: from and to a beat (from the song start)
+  fromBeat = 0,
+  toBeat = Infinity
+): PartEvent[] {
+  const beatMs = getBeatMs(tempo);
+  return parts
+    .filter((part) => roles.includes(part.role))
+    .flatMap((part) =>
+      Array.from({ length: Math.floor(part.notes.length / 4) }, (_, i) => {
+        const [start, length, midi, velocity] = part.notes.slice(i * 4, i * 4 + 4);
+        return {
+          time: (beatsPerBar + start - fromBeat) * beatMs,
+          duration: Math.min(length, toBeat - start) * beatMs,
+          midi,
+          velocity,
+          role: part.role,
+          start,
+        };
+      })
+    )
+    .filter((event) => event.start >= fromBeat - 1e-6 && event.start < toBeat - 1e-6)
+    .map(({ start, ...event }) => event)
+    .sort((a, b) => a.time - b.time);
+}

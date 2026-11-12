@@ -44,6 +44,12 @@ export type ChordDisplaySettings = {
 export type Fingering = 'right' | 'left' | 'both' | 'none';
 
 /** A song imported from a ChordPro file or a chord sheet */
+/** Parts of a song played by the built-in sound (Songsterr songs) */
+export type SongPartRole = 'rhythm' | 'bass' | 'lead' | 'melody';
+
+/** The notes of a part: flat [start, length, midi, velocity, ...] in beats from the song start */
+export type SongPart = { role: SongPartRole; name: string; notes: number[] };
+
 export type ImportedSong = {
   id: string;
   title: string;
@@ -63,6 +69,10 @@ export type ImportedSong = {
   url?: string;
   /** parts of the song (verse, chorus...): their name and the index of their first chord */
   sections?: { name: string; start: number }[];
+  /** beats of intro before the first chord */
+  leadIn?: number;
+  /** notes of the instruments (rhythm guitar, bass, lead, melody), to hear the real song */
+  parts?: SongPart[];
 };
 
 /** Tonics asked in quizzes: every key, or natural keys only (no sharp or flat) */
@@ -125,6 +135,8 @@ export type RhythmGameSettings = {
   gamification: boolean;
   /** built-in sound: the chords of the song, a click on the beat, both, or nothing */
   sound: 'off' | 'chords' | 'click' | 'both';
+  /** built-in sound: the parts of Songsterr songs heard (the rhythm guitar replaces the chords) */
+  songParts: SongPartRole[];
 };
 
 export type ScaleSet =
