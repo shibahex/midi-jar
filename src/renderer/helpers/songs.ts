@@ -250,7 +250,7 @@ export function parseChordSheet(
     chords,
     ...(beats.length ? { beats } : {}),
     ...(beatsPerBar ? { beatsPerBar } : {}),
-    ...(bpm >= 30 && bpm <= 300 ? { bpm } : {}),
+    ...(bpm > 0 ? { bpm } : {}),
     ...(sections.length > 1 ? { sections: sections.filter((x) => x.start < chords.length) } : {}),
   };
 }
