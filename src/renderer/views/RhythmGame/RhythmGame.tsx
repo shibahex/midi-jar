@@ -25,10 +25,11 @@ import {
   PlayableSong,
 } from 'renderer/helpers';
 
-import { Instrument, synth } from 'renderer/helpers/synth';
+import { Channel, Instrument, synth } from 'renderer/helpers/synth';
 import { SongPart, SongPartRole } from 'main/types';
 
 import ChordQuizKeyboard from '../ChordQuiz/ChordQuizKeyboard';
+import Mixer from './Mixer';
 import PracticePanel from './PracticePanel';
 import {
   BEATS_PER_BAR,
@@ -78,6 +79,8 @@ const PART_INSTRUMENTS: Record<SongPartRole, Instrument> = {
 const LOOKAHEAD_MS = 150;
 
 const ALL_PARTS: SongPartRole[] = ['rhythm', 'bass', 'lead', 'melody'];
+
+const DEFAULT_VOLUMES = { chords: 80, rhythm: 70, bass: 75, lead: 65, melody: 80, click: 60 };
 
 const PART_NAMES: Record<SongPartRole, string> = {
   rhythm: 'Rhythm guitar',
@@ -277,6 +280,15 @@ const RhythmGame: React.FC = () => {
   // built-in sound: the chords of the song, a click on the beat
   const sound = gameSettings.sound ?? 'chords';
   const sounded = useRef(new Set<number>());
+  // volume of each part (the mixer)
+  const volumes = { ...DEFAULT_VOLUMES, ...gameSettings.volumes };
+  const volumesKey = JSON.stringify(volumes);
+  useEffect(() => {
+    Object.entries(JSON.parse(volumesKey) as Record<Channel, number>).forEach(([id, value]) =>
+      synth.setChannelVolume(id as Channel, value / 100)
+    );
+  }, [volumesKey]);
+
   // the parts of the song heard (the rhythm guitar replaces the chords)
   const songParts = (gameSettings.songParts ?? ALL_PARTS).join(',');
   const partEvents = useMemo(() => {
@@ -302,6 +314,8 @@ const RhythmGame: React.FC = () => {
   const playsRhythmPartRef = useRef(playsRhythmPart);
   playsRhythmPartRef.current = playsRhythmPart;
   const partCursor = useRef(0);
+  // the song time at the last frame (to notice jumps)
+  const lastSongTime = useRef(0);
   const lastBeat = useRef(-1);
   // listening: the song plays by itself, nothing is judged
   const [listening, setListening] = useState(false);
@@ -346,6 +360,9 @@ const RhythmGame: React.FC = () => {
     sounded.current = new Set();
     lastBeat.current = -1;
     partCursor.current = 0;
+    lastSongTime.current = 0;
+    // notes of a previous run, still to come, are stopped
+    synth.stopAll();
     setCombo(0);
     setBestCombo(0);
     setScore(0);
@@ -512,6 +529,7 @@ const RhythmGame: React.FC = () => {
   /** Stops the song (and Spotify) */
   const stop = useCallback(() => {
     setPhase('ready');
+    synth.stopAll();
     setCalibrating(false);
     if (spotifyOnRef.current) window.app.spotify.pause().catch(() => {});
   }, []);
@@ -557,6 +575,23 @@ const RhythmGame: React.FC = () => {
       const t = songTime.current;
       setNow(t);
 
+      // the song jumped (restarted, or moved back or ahead in Spotify): the sound follows
+      if (t < lastSongTime.current - 200 || t > lastSongTime.current + 1500) {
+        synth.stopAll();
+        const events = partEventsRef.current;
+        const next = events.findIndex((e) => e.time >= t);
+        partCursor.current = next === -1 ? events.length : next;
+        sounded.current = new Set(hitsRef.current.filter((h) => h.time < t).map((h) => h.id));
+        lastBeat.current = Math.floor(t / beatMs);
+        // moved back: the chords coming again can be played again
+        if (t < lastSongTime.current) {
+          setHits((current) =>
+            current.map((h) => (h.time >= t - GOOD_MS ? { ...h, result: undefined } : h))
+          );
+        }
+      }
+      lastSongTime.current = t;
+
       // built-in sound (not while waiting for a missed chord)
       if (waitingRef.current === null) {
         const beatNow = Math.floor(t / beatMs);
@@ -582,7 +617,8 @@ const RhythmGame: React.FC = () => {
                 // listening: the parts are softer, so the chords stand out
                 listeningRef.current ? Math.round(event.velocity * 0.6) : event.velocity,
                 (event.time - t) / rateRef.current / 1000,
-                PART_INSTRUMENTS[event.role]
+                PART_INSTRUMENTS[event.role],
+                event.role
               );
             }
           }
@@ -849,6 +885,25 @@ const RhythmGame: React.FC = () => {
     </div>
   );
 
+  // volume bars: the chords, the parts of the song it has, the click
+  const [showMixer, setShowMixer] = useState(false);
+  const mixer = (
+    <Mixer
+      channels={[
+        { id: 'chords', label: 'Chords', value: volumes.chords },
+        ...round.parts.map((part) => ({
+          id: part.role,
+          label: PART_NAMES[part.role],
+          value: volumes[part.role],
+          muted: !enabledParts.includes(part.role),
+        })),
+        { id: 'click', label: 'Click', value: volumes.click },
+      ]}
+      onInput={(id, value) => synth.setChannelVolume(id as Channel, value / 100)}
+      onChange={(id, value) => updateSetting('rhythmGame.volumes', { ...volumes, [id]: value })}
+    />
+  );
+
   const songPicker = (
     <Select
       className={cx('songPicker')}
@@ -890,6 +945,16 @@ const RhythmGame: React.FC = () => {
       {practicing && (
         <div className={cx('practiceInfo')}>
           Practice: {sectionLabel} · {speed}%{practiceLoop && ` · loop ${loop + 1}`}
+        </div>
+      )}
+
+      {phase === 'playing' && (
+        <div className={cx('mixerToggle')}>
+          <Button size="sm" intent="neutral" onClick={() => setShowMixer((v) => !v)}>
+            <Icon name="music" />
+            Volume
+          </Button>
+          {showMixer && mixer}
         </div>
       )}
 
@@ -1034,6 +1099,7 @@ const RhythmGame: React.FC = () => {
             </div>
           )}
           {partToggles}
+          {mixer}
           <div className={cx('buttons')}>
             {songPicker}
             <Button

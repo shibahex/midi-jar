@@ -152,6 +152,15 @@ export type RhythmGameSettings = {
   sound: 'off' | 'chords' | 'click' | 'both';
   /** built-in sound: the parts of Songsterr songs heard (the rhythm guitar replaces the chords) */
   songParts: SongPartRole[];
+  /** built-in sound: volume of each part, from 0 to 100 */
+  volumes: {
+    chords: number;
+    rhythm: number;
+    bass: number;
+    lead: number;
+    melody: number;
+    click: number;
+  };
   /** Spotify: the Client ID of the user's Spotify app (to log in) */
   spotifyClientId: string;
   /** Spotify: songs linked to Spotify play there, in time with the game */
@@ -251,6 +260,8 @@ export type GeneralSettings = {
   playNotes: boolean;
   /** built-in sound: volume from 0 to 100 */
   soundVolume: number;
+  /** built-in sound: classical (piano, strings, flute) or electric */
+  soundStyle: 'classical' | 'electric';
 };
 
 export type Settings = {

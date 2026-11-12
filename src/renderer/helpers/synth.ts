@@ -1,86 +1,209 @@
 /**
- * A small built-in sound (Web Audio): a soft electric-piano-like tone for notes and chords,
- * and a click for the beat. No samples: a few oscillators with a decaying envelope.
+ * A small built-in sound (Web Audio, no samples): a few oscillators per note with their own
+ * envelopes, a concert hall reverb, and a volume for each part (chords, bass, melody...).
+ * Two styles: classical (grand piano, cello, violins, flute) or electric (soft keys, synth bass,
+ * buzzy lead, voice).
  */
 
-type Voice = { gain: GainNode; oscillators: OscillatorNode[] };
-
-/** Sounds: soft keys (chords, rhythm guitar), bass, lead guitar, voice (melody) */
+/** Sounds of the parts of a song */
 export type Instrument = 'keys' | 'bass' | 'lead' | 'voice';
 
-type Tone = {
-  partials: [OscillatorType, number, number][];
-  level: number;
-  attack: number;
-  /** level kept while the note is held (1: no fade) */
-  sustain: number;
-  /** brightness: lowpass frequency as a multiple of the note frequency */
-  brightness: number;
-  maxCutoff: number;
-  vibrato?: number;
+/** The parts heard, each with its own volume */
+export type Channel = 'chords' | 'rhythm' | 'bass' | 'lead' | 'melody' | 'click' | 'keyboard';
+
+export type SoundStyle = 'classical' | 'electric';
+
+type Partial = {
+  type: OscillatorType;
+  /** frequency as a multiple of the note's */
+  ratio: number;
+  amount: number;
+  /** seconds for this partial to fade (higher partials fade faster on a piano) */
+  decay?: number;
+  /** detune in cents (strings are a few players slightly apart) */
+  detune?: number;
 };
 
-const TONES: Record<Instrument, Tone> = {
-  keys: {
-    partials: [
-      ['triangle', 1, 1],
-      ['sine', 2, 0.35],
-      ['sine', 3, 0.12],
-    ],
-    level: 0.22,
-    attack: 0.006,
-    sustain: 0.05,
-    brightness: 8,
-    maxCutoff: 9000,
+type Tone = {
+  partials: Partial[];
+  level: number;
+  attack: number;
+  /** level kept while the note is held (1: no fade, small: struck and fading) */
+  sustain: number;
+  /** lowpass frequency as a multiple of the note frequency, and its highest value */
+  brightness: number;
+  maxCutoff: number;
+  /** vibrato depth in cents, starting after this many seconds */
+  vibrato?: number;
+  vibratoDelay?: number;
+  /** a short noise at the start: the hammer of a piano, the breath of a flute */
+  noise?: { amount: number; length: number; frequency: number };
+  release: number;
+};
+
+/** grand piano: slightly stretched partials, each fading on its own, a hammer at the start */
+const PIANO: Tone = {
+  partials: [
+    { type: 'sine', ratio: 1, amount: 1, decay: 3.5 },
+    { type: 'sine', ratio: 2.001, amount: 0.55, decay: 2 },
+    { type: 'sine', ratio: 3.004, amount: 0.28, decay: 1.2 },
+    { type: 'sine', ratio: 4.009, amount: 0.14, decay: 0.8 },
+    { type: 'sine', ratio: 5.016, amount: 0.07, decay: 0.5 },
+  ],
+  level: 0.2,
+  attack: 0.003,
+  sustain: 0.02,
+  brightness: 9,
+  maxCutoff: 7000,
+  noise: { amount: 0.06, length: 0.03, frequency: 3000 },
+  release: 0.35,
+};
+
+const TONES: Record<SoundStyle, Record<Instrument, Tone>> = {
+  classical: {
+    keys: PIANO,
+    // cello: bowed, a slow attack
+    bass: {
+      partials: [
+        { type: 'sawtooth', ratio: 1, amount: 0.7, detune: -4 },
+        { type: 'sawtooth', ratio: 1, amount: 0.5, detune: 5 },
+        { type: 'sine', ratio: 0.5, amount: 0.3 },
+      ],
+      level: 0.16,
+      attack: 0.07,
+      sustain: 0.85,
+      brightness: 5,
+      maxCutoff: 1500,
+      vibrato: 6,
+      vibratoDelay: 0.25,
+      release: 0.25,
+    },
+    // violins: a section, slightly apart, with vibrato
+    lead: {
+      partials: [
+        { type: 'sawtooth', ratio: 1, amount: 0.5, detune: -7 },
+        { type: 'sawtooth', ratio: 1, amount: 0.5, detune: 0 },
+        { type: 'sawtooth', ratio: 1, amount: 0.5, detune: 8 },
+      ],
+      level: 0.09,
+      attack: 0.09,
+      sustain: 0.9,
+      brightness: 4,
+      maxCutoff: 3500,
+      vibrato: 10,
+      vibratoDelay: 0.2,
+      release: 0.3,
+    },
+    // flute: a pure tone, some breath
+    voice: {
+      partials: [
+        { type: 'sine', ratio: 1, amount: 1 },
+        { type: 'sine', ratio: 2, amount: 0.12 },
+        { type: 'triangle', ratio: 1, amount: 0.15 },
+      ],
+      level: 0.17,
+      attack: 0.06,
+      sustain: 0.9,
+      brightness: 6,
+      maxCutoff: 5000,
+      vibrato: 7,
+      vibratoDelay: 0.3,
+      noise: { amount: 0.04, length: 0.12, frequency: 2500 },
+      release: 0.2,
+    },
   },
-  bass: {
-    partials: [
-      ['sine', 1, 1],
-      ['triangle', 2, 0.25],
-    ],
-    level: 0.32,
-    attack: 0.005,
-    sustain: 0.35,
-    brightness: 6,
-    maxCutoff: 1400,
-  },
-  lead: {
-    partials: [
-      ['sawtooth', 1, 0.6],
-      ['square', 1.003, 0.25],
-    ],
-    level: 0.12,
-    attack: 0.01,
-    sustain: 0.6,
-    brightness: 5,
-    maxCutoff: 4000,
-    vibrato: 4,
-  },
-  voice: {
-    partials: [
-      ['triangle', 1, 1],
-      ['sine', 2, 0.2],
-    ],
-    level: 0.2,
-    attack: 0.04,
-    sustain: 0.8,
-    brightness: 4,
-    maxCutoff: 3500,
-    vibrato: 6,
+  electric: {
+    keys: {
+      partials: [
+        { type: 'triangle', ratio: 1, amount: 1, decay: 2.5 },
+        { type: 'sine', ratio: 2, amount: 0.35, decay: 1.5 },
+        { type: 'sine', ratio: 3, amount: 0.12, decay: 1 },
+      ],
+      level: 0.22,
+      attack: 0.006,
+      sustain: 0.05,
+      brightness: 8,
+      maxCutoff: 9000,
+      release: 0.25,
+    },
+    bass: {
+      partials: [
+        { type: 'sine', ratio: 1, amount: 1 },
+        { type: 'triangle', ratio: 2, amount: 0.25 },
+      ],
+      level: 0.32,
+      attack: 0.005,
+      sustain: 0.35,
+      brightness: 6,
+      maxCutoff: 1400,
+      release: 0.2,
+    },
+    lead: {
+      partials: [
+        { type: 'sawtooth', ratio: 1, amount: 0.6 },
+        { type: 'square', ratio: 1.003, amount: 0.25 },
+      ],
+      level: 0.12,
+      attack: 0.01,
+      sustain: 0.6,
+      brightness: 5,
+      maxCutoff: 4000,
+      vibrato: 4,
+      release: 0.2,
+    },
+    voice: {
+      partials: [
+        { type: 'triangle', ratio: 1, amount: 1 },
+        { type: 'sine', ratio: 2, amount: 0.2 },
+      ],
+      level: 0.2,
+      attack: 0.04,
+      sustain: 0.8,
+      brightness: 4,
+      maxCutoff: 3500,
+      vibrato: 6,
+      release: 0.25,
+    },
   },
 };
+
+/** How much of the sound goes through the reverb, for each style */
+const REVERB: Record<SoundStyle, number> = { classical: 0.3, electric: 0.12 };
+
+type Voice = { gain: GainNode; nodes: AudioScheduledSourceNode[]; release: number };
 
 const midiToFrequency = (midi: number) => 440 * 2 ** ((midi - 69) / 12);
 
-/** time for a note to fade out once released, in seconds */
-const RELEASE = 0.25;
+/** A concert hall: a few seconds of fading noise, a little different in each ear */
+function hallImpulse(context: AudioContext, seconds = 2.4) {
+  const length = Math.floor(context.sampleRate * seconds);
+  const impulse = context.createBuffer(2, length, context.sampleRate);
+  [0, 1].forEach((channel) => {
+    const data = impulse.getChannelData(channel);
+    data.forEach((_, i) => {
+      data[i] = (Math.random() * 2 - 1) * (1 - i / length) ** 3;
+    });
+  });
+  return impulse;
+}
 
 class Synth {
   private context: AudioContext | null = null;
 
   private master: GainNode | null = null;
 
+  private wet: GainNode | null = null;
+
   private volume = 0.7;
+
+  private style: SoundStyle = 'classical';
+
+  private channels = new Map<Channel, GainNode>();
+
+  private channelVolumes = new Map<Channel, number>();
+
+  /** notes playing or to come (to stop them all) */
+  private voices = new Set<Voice>();
 
   /** notes held from a keyboard (one voice per key) */
   private held = new Map<number, Voice>();
@@ -95,13 +218,34 @@ class Synth {
     if (!this.context) {
       this.context = new AudioContext();
       const compressor = this.context.createDynamicsCompressor();
+      compressor.connect(this.context.destination);
       this.master = this.context.createGain();
       this.master.gain.value = this.volume;
       this.master.connect(compressor);
-      compressor.connect(this.context.destination);
+      // reverb: sent from the master, mixed back in
+      const reverb = this.context.createConvolver();
+      reverb.buffer = hallImpulse(this.context);
+      this.wet = this.context.createGain();
+      this.wet.gain.value = REVERB[this.style];
+      this.master.connect(reverb);
+      reverb.connect(this.wet);
+      this.wet.connect(compressor);
     }
     if (this.context.state === 'suspended') this.context.resume().catch(() => {});
     return { context: this.context, master: this.master as GainNode };
+  }
+
+  /** The volume of a part (created on first use) */
+  private channel(name: Channel) {
+    const { context, master } = this.output();
+    let gain = this.channels.get(name);
+    if (!gain) {
+      gain = context.createGain();
+      gain.gain.value = this.channelVolumes.get(name) ?? 1;
+      gain.connect(master);
+      this.channels.set(name, gain);
+    }
+    return gain;
   }
 
   /** Volume from 0 to 1 */
@@ -110,71 +254,125 @@ class Synth {
     if (this.master) this.master.gain.value = this.volume;
   }
 
-  /** A note starting at `when` (audio time) with a sound */
+  /** Volume of a part, from 0 to 1 */
+  setChannelVolume(name: Channel, volume: number) {
+    const value = Math.max(0, Math.min(1, volume));
+    this.channelVolumes.set(name, value);
+    const gain = this.channels.get(name);
+    if (gain) gain.gain.value = value;
+  }
+
+  setStyle(style: SoundStyle) {
+    this.style = style;
+    if (this.wet) this.wet.gain.value = REVERB[style];
+  }
+
+  /** A note starting at `when` (audio time), with a sound, on a part */
   private voice(
     midi: number,
     velocity: number,
     when: number,
-    instrument: Instrument = 'keys'
+    instrument: Instrument,
+    channel: Channel
   ): Voice {
-    const { context, master } = this.output();
-    const tone = TONES[instrument];
+    const { context } = this.output();
+    const tone = TONES[this.style][instrument];
     const frequency = midiToFrequency(midi);
-    const level = tone.level * (0.3 + 0.7 * (velocity / 127));
+    // softer notes are also darker
+    const strength = 0.3 + 0.7 * (velocity / 127);
+    const level = tone.level * strength;
 
     const gain = context.createGain();
     gain.gain.setValueAtTime(0, when);
     gain.gain.linearRampToValueAtTime(level, when + tone.attack);
-    // a quick drop, then a long decay (higher notes fade faster), or held
-    gain.gain.exponentialRampToValueAtTime(level * Math.max(0.45, tone.sustain), when + 0.25);
-    gain.gain.exponentialRampToValueAtTime(
-      level * Math.max(0.0001, tone.sustain),
-      when + 2.5 - Math.min(1.5, midi / 80)
-    );
+    gain.gain.setTargetAtTime(level * Math.max(0.0001, tone.sustain), when + tone.attack, 0.6);
 
-    // the tone gets darker as it fades
     const filter = context.createBiquadFilter();
     filter.type = 'lowpass';
-    filter.frequency.setValueAtTime(Math.min(tone.maxCutoff, frequency * tone.brightness), when);
-    filter.frequency.exponentialRampToValueAtTime(
-      Math.min(tone.maxCutoff / 2, frequency * (tone.brightness / 2.5)),
-      when + 0.8
+    const cutoff = Math.min(tone.maxCutoff, frequency * tone.brightness * (0.5 + strength / 2));
+    filter.frequency.setValueAtTime(cutoff, when);
+    filter.frequency.setTargetAtTime(
+      Math.max(frequency * 1.5, cutoff / 2.5),
+      when + tone.attack,
+      0.5
     );
     filter.connect(gain);
-    gain.connect(master);
+    gain.connect(this.channel(channel));
 
-    // vibrato: a slow wobble of the pitch (in cents), starting after the attack
-    let lfo: OscillatorNode | null = null;
-    let lfoGain: GainNode | null = null;
+    const nodes: AudioScheduledSourceNode[] = [];
+
+    // vibrato: a slow wobble of the pitch (in cents)
+    let vibrato: GainNode | null = null;
     if (tone.vibrato) {
-      lfo = context.createOscillator();
-      lfo.frequency.value = 5.5;
-      lfoGain = context.createGain();
-      lfoGain.gain.setValueAtTime(0, when);
-      lfoGain.gain.linearRampToValueAtTime(tone.vibrato, when + 0.3);
-      lfo.connect(lfoGain);
+      const lfo = context.createOscillator();
+      lfo.frequency.value = 5.2 + Math.random() * 0.6;
+      vibrato = context.createGain();
+      vibrato.gain.setValueAtTime(0, when);
+      vibrato.gain.linearRampToValueAtTime(tone.vibrato, when + (tone.vibratoDelay ?? 0.3) + 0.3);
+      lfo.connect(vibrato);
       lfo.start(when);
+      nodes.push(lfo);
     }
 
-    const oscillators = tone.partials.map(([type, ratio, amount]) => {
+    tone.partials.forEach((partial) => {
       const oscillator = context.createOscillator();
-      oscillator.type = type;
-      oscillator.frequency.value = frequency * ratio;
-      if (lfoGain) lfoGain.connect(oscillator.detune);
+      oscillator.type = partial.type;
+      oscillator.frequency.value = frequency * partial.ratio;
+      if (partial.detune) oscillator.detune.value = partial.detune;
+      if (vibrato) vibrato.connect(oscillator.detune);
       const partialGain = context.createGain();
-      partialGain.gain.value = amount;
+      partialGain.gain.setValueAtTime(partial.amount, when);
+      // each partial fades on its own (higher ones faster, higher notes faster)
+      if (partial.decay) {
+        const decay = partial.decay * Math.max(0.3, 1 - (midi - 48) / 80);
+        partialGain.gain.setTargetAtTime(partial.amount * 0.001, when + tone.attack, decay / 3);
+      }
       oscillator.connect(partialGain);
       partialGain.connect(filter);
       oscillator.start(when);
-      return oscillator;
+      nodes.push(oscillator);
     });
-    return { gain, oscillators: lfo ? [...oscillators, lfo] : oscillators };
+
+    // hammer or breath
+    if (tone.noise) {
+      const samples = Math.floor(context.sampleRate * tone.noise.length);
+      const buffer = context.createBuffer(1, samples, context.sampleRate);
+      const data = buffer.getChannelData(0);
+      data.forEach((_, i) => {
+        data[i] = (Math.random() * 2 - 1) * (1 - i / samples);
+      });
+      const noise = context.createBufferSource();
+      noise.buffer = buffer;
+      const band = context.createBiquadFilter();
+      band.type = 'bandpass';
+      band.frequency.value = Math.min(8000, tone.noise.frequency + frequency);
+      const noiseGain = context.createGain();
+      noiseGain.gain.value = tone.noise.amount * strength;
+      noise.connect(band);
+      band.connect(noiseGain);
+      noiseGain.connect(gain);
+      noise.start(when);
+      nodes.push(noise);
+    }
+
+    const voice: Voice = { gain, nodes, release: tone.release };
+    this.voices.add(voice);
+    return voice;
   }
 
   private release(voice: Voice, when: number) {
     voice.gain.gain.cancelScheduledValues(when);
-    voice.gain.gain.setTargetAtTime(0, when, RELEASE / 4);
-    voice.oscillators.forEach((oscillator) => oscillator.stop(when + RELEASE));
+    voice.gain.gain.setTargetAtTime(0, when, voice.release / 4);
+    const end = when + voice.release + 0.05;
+    voice.nodes.forEach((node) => {
+      try {
+        node.stop(end);
+      } catch (e) {
+        // already stopped
+      }
+    });
+    const left = (end - (this.context?.currentTime ?? 0)) * 1000;
+    setTimeout(() => this.voices.delete(voice), Math.max(0, left) + 100);
   }
 
   /** A key is pressed (the same key pressed again restarts) */
@@ -183,7 +381,7 @@ class Synth {
     const playing = this.held.get(midi);
     if (playing) this.release(playing, context.currentTime);
     this.sustained.delete(midi);
-    this.held.set(midi, this.voice(midi, velocity, context.currentTime));
+    this.held.set(midi, this.voice(midi, velocity, context.currentTime, 'keys', 'keyboard'));
   }
 
   /** A key is released (held on while the sustain pedal is down) */
@@ -216,18 +414,22 @@ class Synth {
     duration: number,
     velocity = 90,
     delay = 0,
-    instrument: Instrument = 'keys'
+    instrument: Instrument = 'keys',
+    channel: Channel = 'chords'
   ) {
     const { context } = this.output();
     const start = context.currentTime + Math.max(0, delay);
     midis.forEach((midi) =>
-      this.release(this.voice(midi, velocity, start, instrument), start + Math.max(0.05, duration))
+      this.release(
+        this.voice(midi, velocity, start, instrument, channel),
+        start + Math.max(0.05, duration)
+      )
     );
   }
 
   /** A click for the beat (higher on the first beat of a bar) */
   click(accent = false) {
-    const { context, master } = this.output();
+    const { context } = this.output();
     const now = context.currentTime;
     const oscillator = context.createOscillator();
     const gain = context.createGain();
@@ -236,16 +438,27 @@ class Synth {
     gain.gain.setValueAtTime(accent ? 0.12 : 0.07, now);
     gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.05);
     oscillator.connect(gain);
-    gain.connect(master);
+    gain.connect(this.channel('click'));
     oscillator.start(now);
     oscillator.stop(now + 0.06);
   }
 
-  /** Every note stops (leaving a page) */
+  /** Every note stops now, also the ones scheduled to come (stop, or a jump in the song) */
   stopAll() {
     if (!this.context) return;
     const now = this.context.currentTime;
-    this.held.forEach((voice) => this.release(voice, now));
+    this.voices.forEach((voice) => {
+      voice.gain.gain.cancelScheduledValues(now);
+      voice.gain.gain.setTargetAtTime(0, now, 0.02);
+      voice.nodes.forEach((node) => {
+        try {
+          node.stop(now + 0.1);
+        } catch (e) {
+          // already stopped
+        }
+      });
+    });
+    this.voices.clear();
     this.held.clear();
     this.sustained.clear();
   }

@@ -1,0 +1,63 @@
+@import 'tokens';
+
+.base {
+  display: flex;
+  justify-content: center;
+  align-items: flex-end;
+  gap: 0.9em;
+  padding: 0.6em 0.8em;
+  border-radius: 0.6em;
+  background: rgba($color-black, 0.35);
+  border: 1px solid rgba($color-white, 0.06);
+}
+
+.channel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25em;
+  width: 3.4em;
+
+  &--muted {
+    opacity: 0.4;
+  }
+}
+
+.value {
+  font-size: 0.75em;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.7;
+}
+
+.track {
+  position: relative;
+  width: 0.9em;
+  height: 5.5em;
+  border-radius: 999px;
+  background: rgba($color-white, 0.1);
+  overflow: hidden;
+  cursor: ns-resize;
+  touch-action: none;
+
+  &:focus-visible {
+    outline: 2px solid $color-primary-light;
+    outline-offset: 2px;
+  }
+}
+
+.fill {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  border-radius: 999px;
+  background: linear-gradient(to top, $color-primary-normal, $color-primary-light);
+  transition: height 0.05s;
+}
+
+.label {
+  font-size: 0.72em;
+  text-align: center;
+  line-height: 1.1;
+  opacity: 0.85;
+}
