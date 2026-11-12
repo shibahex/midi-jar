@@ -7,13 +7,12 @@ import {
   FormField,
   FormControlLabel,
   Input,
-  Slider,
   Select,
   Toolbar,
 } from '@la-jarre-a-son/ui';
 
 import { useSettings } from 'renderer/contexts/Settings';
-import { Icon, ScrollContainer } from 'renderer/components';
+import { Icon, InputNumber, ScrollContainer } from 'renderer/components';
 import {
   getAllSongs,
   getIncludedSongs,
@@ -129,7 +128,7 @@ const ImportSongs: React.FC<{ songs: ImportedSong[] }> = ({ songs }) => {
       songs.map((song) => {
         if (song.id !== id) return song;
         const { bpm: _old, ...rest } = song;
-        return value && bpm > 0 ? { ...rest, bpm: Math.min(300, bpm) } : rest;
+        return value && bpm > 0 ? { ...rest, bpm } : rest;
       })
     );
   };
@@ -191,8 +190,7 @@ const ImportSongs: React.FC<{ songs: ImportedSong[] }> = ({ songs }) => {
               <span className={cx('songTempo')} title="Tempo of this song (beats per minute)">
                 <input
                   type="number"
-                  min={30}
-                  max={300}
+                  min={1}
                   placeholder="BPM?"
                   aria-label={`Tempo of ${song.title}`}
                   value={song.bpm ?? ''}
@@ -263,15 +261,19 @@ const RhythmGameSettings: React.FC = () => {
             <ImportSongs songs={importedSongs} />
           </FormField>
 
-          <FormField label="Tempo" hint="Beats per minute">
-            <Slider
+          <FormField label="Tempo" hint="Beats per minute: any tempo, - and + change it by 5">
+            <InputNumber
+              className={cx('tempo')}
               value={game.tempo}
-              onChange={(value: number) => updateSetting('rhythmGame.tempo', value)}
-              min={50}
-              max={140}
+              onChange={(value: number) => {
+                // any tempo above 0
+                if (Number.isFinite(value) && value > 0) {
+                  updateSetting('rhythmGame.tempo', Math.round(value));
+                }
+              }}
               step={5}
-              marks={[50, 80, 110, 140]}
-              valueText={`${game.tempo}`}
+              min={1}
+              aria-label="Tempo in beats per minute"
             />
           </FormField>
 
