@@ -1,11 +1,12 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import classnames from 'classnames/bind';
-import { Button, FormControlLabel, Input, Switch } from '@la-jarre-a-son/ui';
+import { Button, FormControlLabel, FormField, Input, Select, Switch } from '@la-jarre-a-son/ui';
 
 import { useSettings } from 'renderer/contexts/Settings';
 import { Icon } from 'renderer/components';
 import { ImportedSong, SpotifyStatus, SpotifyTrack } from 'main/types';
 import { estimateFirstChordMs } from 'renderer/helpers';
+import { COMPUTER_SOUND, getSoundInputs } from 'renderer/helpers/audioSync';
 
 import styles from '../ChordQuizSettings/ChordQuizSettings.module.scss';
 
@@ -15,6 +16,7 @@ const SYNCED_BY = {
   estimate: 'estimated, corrected as you play',
   tap: 'set by hand',
   playing: 'from your playing',
+  listening: 'by listening to it',
 };
 
 /** Messages of the main process: "Error invoking remote method ...: Error: message" */
@@ -61,6 +63,20 @@ export const SpotifySettings: React.FC = () => {
       setBusy(false);
     }
   };
+
+  // sound inputs to listen to the song (named once allowed to listen)
+  const listenSync = game.listenSync !== false;
+  const [inputs, setInputs] = useState<{ id: string; label: string }[]>([]);
+  useEffect(() => {
+    if (!listenSync) return;
+    navigator.mediaDevices
+      ?.getUserMedia({ audio: true })
+      .then((stream) => stream.getTracks().forEach((track) => track.stop()))
+      .catch(() => {})
+      .then(getSoundInputs)
+      .then(setInputs)
+      .catch(() => setInputs([]));
+  }, [listenSync]);
 
   const disconnect = async () => {
     await window.app.spotify.logout();
@@ -127,6 +143,39 @@ export const SpotifySettings: React.FC = () => {
           onChange={(value) => updateSetting('rhythmGame.spotifySync', value)}
         />
       </FormControlLabel>
+
+      <FormControlLabel
+        label="Sync By Listening"
+        hint="While a song plays on Spotify, the game listens to it and moves the sync to match (its own sound is off for a few seconds meanwhile)"
+        reverse
+      >
+        <Switch
+          checked={listenSync}
+          onChange={(value) => updateSetting('rhythmGame.listenSync', value)}
+        />
+      </FormControlLabel>
+
+      {listenSync && (
+        <FormField
+          label="Listen To"
+          hint="The sound of the computer hears Spotify best (Linux, with PipeWire or PulseAudio); a microphone near the speakers works too"
+        >
+          <Select
+            aria-label="Sound input"
+            options={[
+              { value: COMPUTER_SOUND, label: 'The sound of the computer' },
+              ...inputs
+                .filter((input) => input.id)
+                .map((input) => ({
+                  value: input.id,
+                  label: input.id === 'default' ? 'The default input (microphone)' : input.label,
+                })),
+            ]}
+            value={game.syncInput || COMPUTER_SOUND}
+            onChange={(value) => updateSetting('rhythmGame.syncInput', value)}
+          />
+        </FormField>
+      )}
     </div>
   );
 };

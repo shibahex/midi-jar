@@ -121,6 +121,9 @@ export const defaultRhythmGameSettings: RhythmGameSettings = {
   latencyMs: 0,
   spotifyClientId: '',
   spotifySync: false,
+  listenSync: true,
+  syncInput: '',
+  playPart: 'chords' as const,
 };
 
 export const defaultScaleDegreesSettings: ScaleDegreesSettings = {

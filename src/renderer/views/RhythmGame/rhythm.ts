@@ -1,4 +1,4 @@
-import { Note } from 'tonal';
+import { Chord, Interval, Midi, Note } from 'tonal';
 import { Chord as TChord } from '@tonaljs/chord';
 
 import { RhythmGameSettings, SongPart, SongPartRole } from 'main/types';
@@ -26,6 +26,8 @@ export type Hit = {
   chord: TChord;
   /** pitch classes of the chord (0-11) */
   chromas: number[];
+  /** a note (or notes) of a part of the song to play, instead of a chord (MIDI numbers) */
+  notes?: number[];
   result?: HitResult;
 };
 
@@ -198,4 +200,50 @@ export function buildPartEvents(
     .filter((event) => event.start >= fromBeat - 1e-6 && event.start < toBeat - 1e-6)
     .map(({ time, duration, midi, velocity, role }) => ({ time, duration, midi, velocity, role }))
     .sort((a, b) => a.time - b.time);
+}
+
+/** notes starting this close together are played together (ms) */
+const TOGETHER_MS = 30;
+
+/**
+ * Hits of a part of the song (lead, melody, bass): its notes, the ones played together
+ * making one hit
+ */
+export function buildNoteHits(events: PartEvent[], tempo: number, sharps: boolean): Hit[] {
+  const beatMs = getBeatMs(tempo);
+  const groups: PartEvent[][] = [];
+  events.forEach((event) => {
+    const group = groups[groups.length - 1];
+    if (group && event.time - group[0].time <= TOGETHER_MS) group.push(event);
+    else groups.push([event]);
+  });
+
+  return groups.map((group, id) => {
+    const midis = [...new Set(group.map((e) => e.midi))].sort((a, b) => a - b);
+    const low = midis[0];
+    const names = midis.map((m) => Midi.midiToNoteName(m, { sharps, pitchClass: true }));
+    const next = groups[id + 1]?.[0].time;
+    const end = Math.max(...group.map((e) => e.time + e.duration));
+    // a chord made of the notes: for the keyboard of the learning mode
+    const tonic = names[0];
+    const chord: TChord = {
+      ...Chord.get(`${tonic}`),
+      empty: false,
+      name: names.join(' '),
+      tonic,
+      notes: names,
+      intervals: midis.map((m) => Interval.fromSemitones(m - low)),
+    };
+    return {
+      id,
+      time: group[0].time,
+      length: Math.max(0.25, ((next ?? end) - group[0].time) / beatMs),
+      chordStart: true,
+      name: [...new Set(names)].join(' '),
+      numeral: Midi.midiToNoteName(low, { sharps }),
+      chord,
+      chromas: [...new Set(midis.map((m) => m % 12))],
+      notes: midis,
+    };
+  });
 }

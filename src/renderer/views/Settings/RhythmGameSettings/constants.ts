@@ -22,6 +22,14 @@ export const fields = {
       { value: 'beat', label: 'On every beat' },
     ],
   },
+  playPart: {
+    choices: [
+      { value: 'chords', label: 'The chords' },
+      { value: 'lead', label: 'The lead guitar' },
+      { value: 'melody', label: 'The melody' },
+      { value: 'bass', label: 'The bass' },
+    ],
+  },
   sound: {
     choices: [
       { value: 'chords', label: 'The chords of the song' },

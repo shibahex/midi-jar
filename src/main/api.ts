@@ -25,6 +25,7 @@ import {
 import { WindowState } from './types/WindowState';
 import { checkUpdates } from './update';
 import * as spotify from './spotify';
+import { startCapture, stopCapture } from './soundCapture';
 
 function sendToAll(channel: string, ...args: unknown[]) {
   const windows = BrowserWindow.getAllWindows();
@@ -299,6 +300,12 @@ ipcMain.handle(
   spotifyCall((query: string) => spotify.search(query))
 );
 ipcMain.handle('spotify:redirectUri', () => spotify.SPOTIFY_REDIRECT_URI);
+
+/* SOUND OF THE COMPUTER (to sync by listening) */
+
+ipcMain.handle('app:sound:start', (event) => startCapture(event.sender));
+ipcMain.handle('app:sound:stop', () => stopCapture());
+app.on('will-quit', () => stopCapture());
 ipcMain.handle(
   'spotify:volume',
   spotifyCall((percent: number) => spotify.setVolume(percent))

@@ -26,6 +26,12 @@ import {
 } from 'renderer/helpers';
 
 import { Channel, INSTRUMENTS, InstrumentName, synth } from 'renderer/helpers/synth';
+import {
+  buildSongTemplate,
+  findFirstChordMs,
+  HeardFrame,
+  SongListener,
+} from 'renderer/helpers/audioSync';
 import { SongPart, SongPartRole } from 'main/types';
 
 import ChordQuizKeyboard from '../ChordQuiz/ChordQuizKeyboard';
@@ -34,6 +40,7 @@ import PracticePanel from './PracticePanel';
 import {
   BEATS_PER_BAR,
   buildHits,
+  buildNoteHits,
   buildPartEvents,
   getBeatMs,
   getSectionChords,
@@ -84,6 +91,24 @@ const PART_NAMES: Record<SongPartRole, string> = {
   melody: 'Melody',
 };
 
+/** What the player can play: the chords, or a part of the song with notes */
+type PlayPart = 'chords' | SongPartRole;
+const PLAY_PART_NAMES: Record<PlayPart, string> = {
+  chords: 'Chords',
+  rhythm: 'Rhythm guitar',
+  lead: 'Lead',
+  melody: 'Melody',
+  bass: 'Bass',
+};
+/** the parts that can be played as notes (the rhythm guitar plays the chords) */
+const NOTE_PARTS: SongPartRole[] = ['lead', 'melody', 'bass'];
+
+/** Listening to sync: how often the song is compared (ms), and for how long at most */
+const HEAR_EVERY_MS = 2000;
+const HEAR_FOR_MS = 45000;
+/** sound needed before comparing (frames of 50 ms) */
+const HEAR_MIN_FRAMES = 140;
+
 /** Messages of the main process: "Error invoking remote method ...: Error: message" */
 const errorText = (e: unknown) =>
   e instanceof Error ? e.message.replace(/^.*Error: /, '') : String(e);
@@ -105,6 +130,18 @@ type Round = {
   beatsPerBar: number;
   noSongTempo: boolean;
 };
+
+/** The beats of sections of a song (first to last), from the song start (with its intro) */
+function getBeatRange(r: Round, first: number, last: number) {
+  const beatOfChord = (index: number) =>
+    (r.rhythm.leadIn ?? 0) +
+    r.chords.slice(0, index).reduce((sum, chord) => sum + (chord.beats ?? r.beatsPerBar), 0);
+  const nextSection = r.sections[last + 1];
+  return {
+    fromBeat: first === 0 ? 0 : beatOfChord(r.sections[first]?.start ?? 0),
+    toBeat: nextSection ? beatOfChord(nextSection.start) : Infinity,
+  };
+}
 
 /** speed up: 5% every 4 hits in a row, up to 1.5 times the tempo */
 const SPEED_UP = 1.05;
@@ -132,9 +169,12 @@ const RhythmGame: React.FC = () => {
 
   // a song in a key: random or the current one (a minor song in its relative minor)
   const newRound = useCallback(
-    (previous?: string): Round => {
-      // the chosen song, or a random one (not the same twice in a row)
-      const chosen = getAllSongs(JSON.parse(importedSongs)).find((s) => s.id === chosenSong);
+    (previous?: string, keep?: string): Round => {
+      // the chosen song, the one kept, or a random one (not the same twice in a row)
+      const all = getAllSongs(JSON.parse(importedSongs));
+      const chosen =
+        all.find((s) => s.id === chosenSong) ??
+        (keep && !chosenSong ? all.find((s) => s.id === keep) : undefined);
       const songs = getIncludedSongs(excludedSongs.split(','), JSON.parse(importedSongs));
       const song =
         chosen ?? randomPick(songs.length > 1 ? songs.filter((s) => s.id !== previous) : songs);
@@ -204,19 +244,44 @@ const RhythmGame: React.FC = () => {
   practicingRef.current = practicing;
   const practiceLoop = practicing && !!gameSettings.practiceLoop;
   const practiceRamp = !!gameSettings.practiceRamp;
+  // what the player plays (a part of the song when it has it)
+  const playPart: PlayPart = gameSettings.playPart ?? 'chords';
+  const playPartRef = useRef(playPart);
+  playPartRef.current = playPart;
+  const preferSharps = accidentals === 'sharp';
   const makeHits = useCallback(
-    (r: Round, first: number, last: number, speed: number) =>
-      buildHits(
+    (r: Round, first: number, last: number, speed: number) => {
+      const playTempo = (r.tempo * speed) / 100;
+      const part = r.parts.find((p) => p.role === playPartRef.current);
+      if (part) {
+        const { fromBeat, toBeat } = getBeatRange(r, first, last);
+        const events = buildPartEvents(
+          [part],
+          [part.role],
+          playTempo,
+          r.beatsPerBar,
+          fromBeat,
+          toBeat
+        );
+        // notes named like the key of the song (C# minor: sharps)
+        const [tonic] = r.keyLabel.split(' ');
+        const sharps = /[#♯]/.test(tonic) || (!/[b♭]/.test(tonic) && preferSharps);
+        if (events.length) return buildNoteHits(events, playTempo, sharps);
+      }
+      return buildHits(
         getSectionChords(r.chords, r.sections, first, last),
-        (r.tempo * speed) / 100,
+        playTempo,
         pattern,
         // the intro plays only when starting from the first section
         { ...r.rhythm, leadIn: first === 0 ? r.rhythm.leadIn : 0 }
-      ),
-    [pattern]
+      );
+    },
+    [pattern, preferSharps]
   );
 
   const [round, setRound] = useState<Round>(() => newRound());
+  const roundRef = useRef(round);
+  roundRef.current = round;
   const { beatsPerBar } = round;
   const [range, setRange] = useState({ first: 0, last: round.sections.length - 1 });
   // the speed the song is played at (it changes when looping faster)
@@ -258,6 +323,15 @@ const RhythmGame: React.FC = () => {
   const syncShift = useRef(0);
   const [shownShift, setShownShift] = useState(0);
   const pendingAdjust = useRef(0);
+  // how the sync was moved while playing (saved with it)
+  const syncSource = useRef<'tap' | 'listening'>('tap');
+  // syncing by listening to the song (a sound input)
+  const listenSync = gameSettings.listenSync !== false;
+  const syncInput = gameSettings.syncInput ?? '';
+  const [hearing, setHearing] = useState<'off' | 'listening' | 'synced' | 'failed'>('off');
+  const [hearingMessage, setHearingMessage] = useState('');
+  // the next run searches further (the sync may be far off)
+  const wideHearing = useRef(false);
   // listening with Spotify: taps on the chord changes, to sync
   const tapOffsets = useRef<number[]>([]);
   const [tapCount, setTapCount] = useState(0);
@@ -309,19 +383,14 @@ const RhythmGame: React.FC = () => {
   const songParts = (gameSettings.songParts ?? ALL_PARTS).join(',');
   const partEvents = useMemo(() => {
     // the beats of the chosen sections, from the song start (after its intro)
-    const beatOfChord = (index: number) =>
-      (round.rhythm.leadIn ?? 0) +
-      round.chords
-        .slice(0, index)
-        .reduce((sum, chord) => sum + (chord.beats ?? round.beatsPerBar), 0);
-    const nextSection = round.sections[range.last + 1];
+    const { fromBeat, toBeat } = getBeatRange(round, range.first, range.last);
     return buildPartEvents(
       round.parts,
       songParts.split(',') as SongPartRole[],
       (round.tempo * speed) / 100,
       round.beatsPerBar,
-      range.first === 0 ? 0 : beatOfChord(round.sections[range.first]?.start ?? 0),
-      nextSection ? beatOfChord(nextSection.start) : Infinity
+      fromBeat,
+      toBeat
     );
   }, [round, songParts, range, speed]);
   const partEventsRef = useRef(partEvents);
@@ -330,6 +399,8 @@ const RhythmGame: React.FC = () => {
   const playsRhythmPartRef = useRef(playsRhythmPart);
   playsRhythmPartRef.current = playsRhythmPart;
   const partCursor = useRef(0);
+  const heardPartsRef = useRef<SongPartRole[]>([]);
+  heardPartsRef.current = songParts.split(',') as SongPartRole[];
   // the song time at the last frame (to notice jumps)
   const lastSongTime = useRef(0);
   const lastBeat = useRef(-1);
@@ -342,9 +413,9 @@ const RhythmGame: React.FC = () => {
   const savedSpeedRef = useRef(savedSpeed);
   savedSpeedRef.current = savedSpeed;
 
-  // settings changed: new round (the whole song), waiting to start
+  // settings changed: new round (the same song, whole), waiting to start
   useEffect(() => {
-    const next = newRound();
+    const next = newRound(undefined, roundRef.current?.song.id);
     setRound(next);
     setRange({ first: 0, last: next.sections.length - 1 });
     const nextSpeed = practicingRef.current ? savedSpeedRef.current : 100;
@@ -353,6 +424,13 @@ const RhythmGame: React.FC = () => {
     setLoop(0);
     setPhase('ready');
   }, [newRound, makeHits]);
+
+  // another part to play: the hits of the same sections
+  useEffect(() => {
+    setHits(makeHits(roundRef.current, range.first, range.last, speed));
+    setPhase('ready');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [playPart]);
 
   /** Plays a song (the same sections at the same speed, or a new song from the start),
    * or only listens to it */
@@ -398,6 +476,8 @@ const RhythmGame: React.FC = () => {
     syncShift.current = 0;
     setShownShift(0);
     pendingAdjust.current = 0;
+    syncSource.current = 'tap';
+    setHearing('off');
     tapOffsets.current = [];
     setTapCount(0);
     const link = next.song.imported?.spotify;
@@ -465,6 +545,102 @@ const RhythmGame: React.FC = () => {
     };
   }, [spotifyLinked, phase, calibrating]);
 
+  // syncing by listening: while Spotify plays the song, what is heard is compared with the
+  // song, and the sync moves to where they match (the game's sound is off meanwhile, not to
+  // be heard instead of the song)
+  useEffect(() => {
+    if (phase !== 'playing' || !spotifyOn || !listenSync) return undefined;
+    const r = roundRef.current;
+    const leadIn = r.rhythm.leadIn ?? 0;
+    const songBeatMs = getBeatMs(r.tempo);
+    const template = buildSongTemplate(r.chords, r.beatsPerBar, leadIn, r.parts);
+    const listener = new SongListener();
+    const heard: HeardFrame[] = [];
+    let read = 0;
+    let searchMs = wideHearing.current ? 6000 : 3000;
+    wideHearing.current = false;
+    let agreed = 0;
+    let found = false;
+    const startedAt = performance.now();
+    let done = false;
+    let interval: ReturnType<typeof setInterval> | undefined;
+
+    const finish = (result: 'synced' | 'failed', message: string) => {
+      if (done) return;
+      done = true;
+      clearInterval(interval);
+      listener.stop();
+      synth.setMuted(false);
+      setHearing(result);
+      setHearingMessage(message);
+    };
+
+    synth.setMuted(true);
+    setHearing('listening');
+    setHearingMessage('');
+    listener
+      .start(syncInput)
+      .then(() => setHearingMessage(listener.label))
+      .catch((e) => finish('failed', `No sound input to listen to: ${errorText(e)}`));
+
+    interval = setInterval(() => {
+      // what was heard, placed in the recording with where Spotify was
+      const player = spotifyPlayer.current;
+      const link = spotifyLinkRef.current;
+      const frames = listener.frames.slice(read);
+      read = listener.frames.length;
+      if (player?.isPlaying && link && player.uri === link.uri) {
+        frames.forEach((frame) =>
+          heard.push({
+            positionMs: player.progressMs + (frame.at - player.at),
+            chroma: frame.chroma,
+          })
+        );
+      }
+      const elapsed = performance.now() - startedAt;
+      if (heard.length < HEAR_MIN_FRAMES) {
+        if (elapsed > 15000 && heard.length < 20) {
+          finish('failed', 'The song could not be heard: pick the sound input in the settings');
+        }
+        return;
+      }
+      if (link?.firstChordMs === undefined) return;
+      const guess = link.firstChordMs + syncShift.current;
+      // the last 20 seconds heard
+      const result = findFirstChordMs(
+        heard.slice(-400),
+        template,
+        songBeatMs,
+        leadIn,
+        guess,
+        searchMs
+      );
+      if (result) {
+        const shift = result.firstChordMs - guess;
+        syncShift.current += shift;
+        syncSource.current = 'listening';
+        setShownShift(syncShift.current);
+        found = true;
+        searchMs = 1500;
+        agreed = Math.abs(shift) <= 60 ? agreed + 1 : 0;
+        // twice in a row at the same place: synced
+        if (agreed >= 2) finish('synced', 'Synced by listening');
+      }
+      if (elapsed > HEAR_FOR_MS) {
+        finish(
+          found ? 'synced' : 'failed',
+          found ? 'Synced by listening' : 'The song did not match what was heard'
+        );
+      }
+    }, HEAR_EVERY_MS);
+
+    return () => {
+      clearInterval(interval);
+      listener.stop();
+      synth.setMuted(false);
+    };
+  }, [phase, spotifyOn, listenSync, syncInput]);
+
   /** Syncing: Spotify plays the song from its start, a tap marks its first chord */
   const calibrate = () => {
     if (!spotifyLink) return;
@@ -478,7 +654,7 @@ const RhythmGame: React.FC = () => {
 
   /** Saves where the first chord of the song is in the Spotify recording */
   const saveSync = useCallback(
-    (firstChordMs: number, syncedBy: 'estimate' | 'tap' | 'playing') => {
+    (firstChordMs: number, syncedBy: 'estimate' | 'tap' | 'playing' | 'listening') => {
       const songId = round.song.id;
       updateSetting(
         'rhythmGame.customSongs',
@@ -513,6 +689,26 @@ const RhythmGame: React.FC = () => {
       setSpotifyMessage(errorText(e));
     }
   };
+
+  // syncing by listening: Listen with Spotify, searching further than while playing
+  // (a song not synced yet is estimated first)
+  const [listenWhenSynced, setListenWhenSynced] = useState(false);
+  const syncByListening = async () => {
+    wideHearing.current = true;
+    if (spotifyOn) {
+      start(round, { listen: true });
+      return;
+    }
+    await autoSync();
+    setListenWhenSynced(true);
+  };
+  useEffect(() => {
+    if (!listenWhenSynced || !spotifyOn || phase !== 'ready') return;
+    setListenWhenSynced(false);
+    wideHearing.current = true;
+    start(round, { listen: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [listenWhenSynced, spotifyOn, phase]);
 
   const tap = useCallback(() => {
     const player = spotifyPlayer.current;
@@ -551,10 +747,11 @@ const RhythmGame: React.FC = () => {
     wasPlaying.current = false;
     const firstChordMs = spotifyLinkRef.current?.firstChordMs;
     const total = syncShift.current + pendingAdjust.current;
+    const source = pendingAdjust.current ? 'playing' : syncSource.current;
     syncShift.current = 0;
     pendingAdjust.current = 0;
     if (firstChordMs === undefined || Math.abs(total) < 1) return;
-    saveSync(firstChordMs + total, pendingAdjust.current ? 'playing' : 'tap');
+    saveSync(firstChordMs + total, source);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase]);
 
@@ -562,6 +759,7 @@ const RhythmGame: React.FC = () => {
   const moveSync = (ms: number) => {
     if (phase === 'playing') {
       syncShift.current += ms;
+      syncSource.current = 'tap';
       setShownShift(syncShift.current);
     } else if (spotifyLink?.firstChordMs !== undefined) {
       saveSync(spotifyLink.firstChordMs + ms, 'tap');
@@ -581,6 +779,7 @@ const RhythmGame: React.FC = () => {
     if (offset === null) return;
     // tapped late: the recording is later than the game thought
     syncShift.current += offset;
+    syncSource.current = 'tap';
     setShownShift(syncShift.current);
     tapOffsets.current = [];
   }, []);
@@ -689,8 +888,15 @@ const RhythmGame: React.FC = () => {
             // a chord reached long ago (the song was paused) is not played late,
             // the rhythm guitar of the song plays the chords itself
             // (listening: the chords are always heard, on top of the song's parts)
-            if (t - h.time > 150 || (playsRhythmPartRef.current && !listeningRef.current)) return;
             const seconds = ((h.length * beatMs) / rateRef.current / 1000) * 0.85;
+            // a part played by the player: its notes are heard when the part is not
+            if (h.notes) {
+              const role = playPartRef.current as SongPartRole;
+              if (t - h.time > 150 || heardPartsRef.current.includes(role)) return;
+              synth.play(h.notes, seconds, 95, 0, role);
+              return;
+            }
+            if (t - h.time > 150 || (playsRhythmPartRef.current && !listeningRef.current)) return;
             const velocity = listeningRef.current ? 115 : 95;
             // a guitar strums the chord
             const strum = synth.isPlucked('chords') ? 0.018 : 0;
@@ -774,8 +980,13 @@ const RhythmGame: React.FC = () => {
     return () => window.removeEventListener('keydown', onKey);
   }, [phase, stop]);
 
+  // keys held at the last change: the keys just pressed are the new ones
+  const previousNotes = useRef<number[]>([]);
+
   // a chord is played: the closest chord to play in time is judged
   useEffect(() => {
+    const pressed = playedMidiNotes.filter((m) => !previousNotes.current.includes(m));
+    previousNotes.current = playedMidiNotes;
     if (!playedMidiNotes.length) {
       armed.current = true;
       return;
@@ -792,12 +1003,19 @@ const RhythmGame: React.FC = () => {
       listenTap();
       return;
     }
-    if (phase !== 'playing' || !armed.current || listeningRef.current) return;
+    if (phase !== 'playing' || listeningRef.current) return;
+    // notes: each new key is played (legato is fine); chords: released between hits
+    const playsNotes = hitsRef.current.some((h) => h.notes);
+    if (playsNotes ? !pressed.length : !armed.current) return;
+    // a note is hit by a key just pressed, the other notes of the hit held
+    const matches = (h: Hit) =>
+      matchesChord(h.chromas, playedMidiNotes) &&
+      (!h.notes || pressed.some((m) => h.chromas.includes(m % 12)));
 
     // waiting for a missed chord: playing it starts the song again
     if (waitingRef.current !== null) {
       const missedHit = hitsRef.current.find((h) => h.id === waitingRef.current);
-      if (missedHit && matchesChord(missedHit.chromas, playedMidiNotes)) {
+      if (missedHit && matches(missedHit)) {
         armed.current = false;
         waitingRef.current = null;
         setWaiting(null);
@@ -812,7 +1030,7 @@ const RhythmGame: React.FC = () => {
     const target = hitsRef.current
       .filter((h) => !h.result && Math.abs(h.time - t) <= window)
       .sort((a, b) => Math.abs(a.time - t) - Math.abs(b.time - t))[0];
-    if (!target || !matchesChord(target.chromas, playedMidiNotes)) return;
+    if (!target || !matches(target)) return;
 
     // judged in real time
     const offset = (t - target.time) / rateRef.current;
@@ -868,10 +1086,13 @@ const RhythmGame: React.FC = () => {
     ? Math.round(((stats.perfect + stats.good * 0.5) / hits.length) * 100)
     : 0;
 
+  // notes are shorter than chords: the lane is zoomed in
+  const playsNotes = hits.some((h) => h.notes);
+  const beatWidth = playsNotes ? BEAT_WIDTH * 2 : BEAT_WIDTH;
   // hits visible on the lane: from a beat behind the line to the end of the lane
   const visible = hits.filter((h) => {
     const beats = (h.time - now) / beatMs;
-    return beats > -1.5 && beats < (100 - HIT_LINE) / BEAT_WIDTH;
+    return beats > -1.5 && beats < (100 - HIT_LINE) / beatWidth;
   });
 
   // pick a song to play, or play random songs
@@ -964,6 +1185,34 @@ const RhythmGame: React.FC = () => {
           </button>
         );
       })}
+    </div>
+  );
+
+  // what the player plays: the chords, or a part of the song (like picking guitar or bass)
+  const playable: PlayPart[] = [
+    'chords',
+    ...NOTE_PARTS.filter((role) => round.parts.some((part) => part.role === role)),
+  ];
+  const playingPart = playable.includes(playPart) ? playPart : 'chords';
+  const partPicker = playable.length > 1 && (
+    <div className={cx('parts')} role="group" aria-label="Part you play">
+      <span className={cx('partsLabel')}>You play</span>
+      {playable.map((part) => (
+        <button
+          key={part}
+          type="button"
+          className={cx('part', { 'part--on': part === playingPart })}
+          aria-pressed={part === playingPart}
+          title={
+            part === 'chords'
+              ? 'Play the chords of the song'
+              : `Play the notes of the ${PLAY_PART_NAMES[part].toLowerCase()}`
+          }
+          onClick={() => updateSetting('rhythmGame.playPart', part)}
+        >
+          {PLAY_PART_NAMES[part]}
+        </button>
+      ))}
     </div>
   );
 
@@ -1078,14 +1327,14 @@ const RhythmGame: React.FC = () => {
       className={cx('songPicker')}
       aria-label="Song to play"
       options={[
-        { value: '', label: 'Random song' },
+        { value: 'random', label: 'Random song' },
         ...getAllSongs(gameSettings.customSongs ?? []).map((song) => ({
           value: song.id,
           label: song.title,
         })),
       ]}
-      onChange={(value) => updateSetting('rhythmGame.song', value)}
-      value={chosenSong}
+      onChange={(value) => updateSetting('rhythmGame.song', value === 'random' ? '' : value)}
+      value={chosenSong || 'random'}
     />
   );
 
@@ -1139,6 +1388,16 @@ const RhythmGame: React.FC = () => {
 
       {phase === 'playing' && spotifyOn && spotifyMessage && (
         <div className={cx('spotifyStatus')}>{spotifyMessage}</div>
+      )}
+
+      {phase === 'playing' && spotifyOn && hearing !== 'off' && (
+        <div className={cx('spotifyStatus', { 'spotifyStatus--ok': hearing === 'synced' })}>
+          {hearing === 'listening' &&
+            `Listening to the song to sync it (game sound off for a moment)${
+              hearingMessage ? `: ${hearingMessage}` : ''
+            }...`}
+          {hearing !== 'listening' && hearingMessage}
+        </div>
       )}
 
       {gameSettings.gamification && (
@@ -1200,8 +1459,8 @@ const RhythmGame: React.FC = () => {
                 'block--repeat': !h.chordStart,
               })}
               style={{
-                left: `${HIT_LINE + ((h.time - now) / beatMs) * BEAT_WIDTH}%`,
-                width: `${Math.max(2, beats * BEAT_WIDTH - 1)}%`,
+                left: `${HIT_LINE + ((h.time - now) / beatMs) * beatWidth}%`,
+                width: `${Math.max(2, beats * beatWidth - 1)}%`,
               }}
             >
               <span className={cx('blockName')}>{formatSharpsFlats(h.name)}</span>
@@ -1239,12 +1498,16 @@ const RhythmGame: React.FC = () => {
 
       {phase === 'ready' && !calibrating && (
         <div className={cx('panel')}>
-          <div className={cx('panelTitle')}>Play the chords as they reach the line</div>
+          <div className={cx('panelTitle')}>
+            Play the {playsNotes ? 'notes' : 'chords'} as they reach the line
+          </div>
           <div className={cx('panelText')}>
             {gameSettings.showTitle === 'end'
               ? 'A mystery song is waiting.'
               : `Get ready to play ${round.song.title}.`}{' '}
-            Release the keys between chords, even when a chord is repeated.
+            {playsNotes
+              ? 'Each new key pressed plays a note (holding the last one is fine).'
+              : 'Release the keys between chords, even when a chord is repeated.'}
           </div>
           {practice}
           {spotifySync && spotifyLink && !round.song.imported?.bpm && (
@@ -1264,11 +1527,22 @@ const RhythmGame: React.FC = () => {
                   Sync automatically
                 </Button>
               )}
+              {listenSync && (
+                <Button
+                  size="sm"
+                  intent={spotifyOn ? 'neutral' : 'primary'}
+                  onClick={syncByListening}
+                  title="Spotify plays the song, the game listens to it and syncs"
+                >
+                  Sync by listening
+                </Button>
+              )}
               <Button size="sm" intent="neutral" variant="ghost" onClick={calibrate}>
                 Sync by tapping
               </Button>
             </div>
           )}
+          {partPicker}
           {partToggles}
           {mixer}
           {latencyArrows}
@@ -1307,7 +1581,9 @@ const RhythmGame: React.FC = () => {
             )}
             {!practiceLoop && !listening && (
               <>
-                You just played the chords of <strong>{round.song.title}</strong>
+                You just played the{' '}
+                {playsNotes ? PLAY_PART_NAMES[playingPart].toLowerCase() : 'chords'} of{' '}
+                <strong>{round.song.title}</strong>
                 {isWholeSong ? '!' : ` (${sectionLabel})`}
               </>
             )}

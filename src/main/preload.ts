@@ -27,6 +27,13 @@ const registerListener =
 export const AppApi = {
   quit: () => ipcRenderer.send('app:quit'),
   fetchPage: (url: string): Promise<string> => ipcRenderer.invoke('app:fetchPage', url),
+  /** the sound played by the computer: chunks of samples, and when the last one was heard */
+  sound: {
+    start: (): Promise<string> => ipcRenderer.invoke('app:sound:start'),
+    stop: (): Promise<void> => ipcRenderer.invoke('app:sound:stop'),
+    onData: (callback: (samples: Float32Array, at: number) => void) =>
+      registerListener('app:sound:data')(callback),
+  },
   spotify: {
     login: (clientId: string): Promise<void> => ipcRenderer.invoke('spotify:login', clientId),
     logout: (): Promise<void> => ipcRenderer.invoke('spotify:logout'),

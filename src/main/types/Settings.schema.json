@@ -542,6 +542,7 @@
                                         "description": "how the first chord was found: estimated, tapped, or corrected from the playing",
                                         "enum": [
                                             "estimate",
+                                            "listening",
                                             "playing",
                                             "tap"
                                         ],
@@ -613,6 +614,10 @@
                 "learningMode": {
                     "type": "boolean"
                 },
+                "listenSync": {
+                    "description": "Spotify: the song is listened to (a sound input) to sync it",
+                    "type": "boolean"
+                },
                 "onMiss": {
                     "description": "learning mode: on a miss, keep going, wait for the chord, or slow down",
                     "enum": [
@@ -629,6 +634,17 @@
                         "beat",
                         "half",
                         "song"
+                    ],
+                    "type": "string"
+                },
+                "playPart": {
+                    "description": "what the player plays: the chords, or the notes of a part of the song",
+                    "enum": [
+                        "bass",
+                        "chords",
+                        "lead",
+                        "melody",
+                        "rhythm"
                     ],
                     "type": "string"
                 },
@@ -703,6 +719,10 @@
                 "spotifySync": {
                     "description": "Spotify: songs linked to Spotify play there, in time with the game",
                     "type": "boolean"
+                },
+                "syncInput": {
+                    "description": "the sound input listened to (\"\": the sound of the computer when it can, or the default)",
+                    "type": "string"
                 },
                 "tempo": {
                     "description": "beats per minute",
