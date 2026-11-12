@@ -1,16 +1,24 @@
-import { ImportedSong } from 'main/types';
+import { ImportedSong, SongPartRole } from 'main/types';
+
+import { readChordName } from './songs';
 
 /**
  * Songsterr songs: the page tells the tracks of the song, and each track (from Songsterr's
  * CDN) has its measures with their time signature, the tempo and every note played.
- * The chords are found from the notes of the rhythm guitar and the bass, half a bar at a time.
+ * The chords are the ones written in the tab, or found from the notes of the rhythm guitar
+ * and the bass, half a bar at a time. The notes of the rhythm guitar, bass, lead guitar and
+ * vocal melody are kept to be played by the built-in sound.
  */
 
 const CDN = 'https://dqsljvtekg760.cloudfront.net';
 
+/** Most notes kept for a part (the settings keep them) */
+const MAX_PART_NOTES = 8000;
+
 type TrackInfo = {
   partId: number;
   name?: string;
+  views?: number;
   isGuitar?: boolean;
   isBassGuitar?: boolean;
   isDrums?: boolean;
@@ -29,12 +37,21 @@ export type SongsterrSong = {
   popularTrackBass?: number;
 };
 
-type Note = { string: number; fret: number; rest?: boolean; dead?: boolean };
+type Note = {
+  string: number;
+  fret: number;
+  rest?: boolean;
+  dead?: boolean;
+  tie?: boolean;
+  ghost?: boolean;
+  accentuated?: boolean;
+};
 type Beat = {
   duration: [number, number];
   dots?: number;
   tuplet?: number;
   rest?: boolean;
+  graceNote?: unknown;
   notes?: Note[];
   chord?: { text?: string };
 };
@@ -50,6 +67,9 @@ export type SongsterrTrack = {
   automations?: { tempo?: { measure: number; bpm: number }[] };
 };
 
+/** A track to fetch, and what it is used for */
+export type SongsterrTrackRef = { role: SongPartRole; name: string; url: string };
+
 export const isSongsterrUrl = (url: string) => {
   try {
     return /(^|\.)songsterr\.com$/i.test(new URL(url).hostname);
@@ -58,12 +78,31 @@ export const isSongsterrUrl = (url: string) => {
   }
 };
 
+/** JSON from Songsterr may have raw control characters in its texts */
+// eslint-disable-next-line no-control-regex
+const parseJson = (text: string) => JSON.parse(text.replace(/[\u0000-\u001f]+/g, ' '));
+
+/** Songsterr's search: the first song found for a name ("seven nation army") */
+export const getSongsterrSearchUrl = (name: string) =>
+  `https://www.songsterr.com/api/songs?size=1&pattern=${encodeURIComponent(name.trim())}`;
+
+/** The page of the first song of a Songsterr search, or null */
+export function readSongsterrSearch(json: string) {
+  try {
+    const songs = parseJson(json) as { songId?: number }[];
+    const id = songs?.[0]?.songId;
+    return id ? `https://www.songsterr.com/a/wsa/song-tab-s${id}` : null;
+  } catch (e) {
+    return null;
+  }
+}
+
 /** The song of a Songsterr page (from the state of the page) */
 export function readSongsterrPage(html: string): SongsterrSong | null {
   const json = html.match(/<script id="state" type="application\/json">([\s\S]*?)<\/script>/)?.[1];
   if (!json) return null;
   try {
-    const song = JSON.parse(json)?.meta?.current;
+    const song = parseJson(json)?.meta?.current;
     if (!song?.songId || !song?.revisionId || !song?.image) return null;
     return song as SongsterrSong;
   } catch (e) {
@@ -71,33 +110,56 @@ export function readSongsterrPage(html: string): SongsterrSong | null {
   }
 }
 
-/** Tracks to read the chords from: the rhythm guitar (or the main guitar) and the bass */
-export function getSongsterrTrackUrls(song: SongsterrSong) {
-  const playable = song.tracks
+/**
+ * Tracks to read: the rhythm guitar (chords), the bass, the lead guitar and the vocal melody
+ */
+export function getSongsterrTracks(song: SongsterrSong): SongsterrTrackRef[] {
+  const tracks = song.tracks
     .map((track, index) => ({ ...track, partId: track.partId ?? index }))
-    .filter((track) => !track.isEmpty && !track.isDrums && !track.isVocalTrack);
-  const guitars = playable.filter((track) => track.isGuitar);
-  const guitar =
-    guitars.find((track) => /rhythm/i.test(track.name ?? '')) ??
-    guitars.find((track) => track.partId === song.popularTrackGuitar) ??
+    .filter((track) => !track.isEmpty && !track.isDrums);
+  const byViews = (a: TrackInfo, b: TrackInfo) => (b.views ?? 0) - (a.views ?? 0);
+  const guitars = tracks.filter((t) => t.isGuitar && !t.isBassGuitar).sort(byViews);
+  const named = (pattern: RegExp) => guitars.find((t) => pattern.test(t.name ?? ''));
+
+  const rhythm =
+    named(/rhythm/i) ??
+    guitars.find((t) => t.partId === song.popularTrackGuitar) ??
     guitars[0] ??
-    playable.find((track) => !track.isBassGuitar);
+    tracks.find((t) => !t.isBassGuitar && !t.isVocalTrack);
+  const lead = named(/lead|solo/i) ?? guitars.find((t) => t !== rhythm);
   const bass =
-    playable.find((track) => track.partId === song.popularTrackBass) ??
-    playable.find((track) => track.isBassGuitar);
-  return [guitar, bass]
-    .filter((track): track is TrackInfo => !!track)
-    .map((track) => `${CDN}/${song.songId}/${song.revisionId}/${song.image}/${track.partId}.json`);
+    tracks.find((t) => t.partId === song.popularTrackBass) ?? tracks.find((t) => t.isBassGuitar);
+  const melody = tracks.filter((t) => t.isVocalTrack).sort(byViews)[0];
+
+  const refs: [SongPartRole, TrackInfo | undefined][] = [
+    ['rhythm', rhythm],
+    ['bass', bass],
+    ['lead', lead !== rhythm ? lead : undefined],
+    ['melody', melody],
+  ];
+  return refs
+    .filter((ref): ref is [SongPartRole, TrackInfo] => !!ref[1])
+    .map(([role, track]) => ({
+      role,
+      name: track.name ?? role,
+      url: `${CDN}/${song.songId}/${song.revisionId}/${song.image}/${track.partId}.json`,
+    }));
 }
 
-/** Length of a beat, in quarter notes */
+/** Parses a track file */
+export const readSongsterrTrack = (json: string) => parseJson(json) as SongsterrTrack;
+
+const isPowerOf2 = (n: number) => n > 0 && 2 ** Math.round(Math.log2(n)) === n;
+
+/** Length of a beat, in quarter notes (grace notes take no time) */
 function beatLength(beat: Beat) {
+  if (beat.graceNote) return 0;
   const [num, den] = beat.duration ?? [1, 4];
   let length = (num / den) * 4;
   if (beat.dots === 1) length *= 1.5;
   if (beat.dots === 2) length *= 1.75;
-  // triplets and other tuplets: n notes in the time of the power of 2 below n
-  if (beat.tuplet && beat.tuplet > 1) {
+  // tuplets: Songsterr already writes most as exact lengths (1/24 for a triplet 16th)
+  if (beat.tuplet && beat.tuplet > 1 && isPowerOf2(den)) {
     length *= 2 ** Math.floor(Math.log2(beat.tuplet)) / beat.tuplet;
   }
   return length;
@@ -110,6 +172,61 @@ function measureLengths(measures: Measure[]) {
     if (measure.signature) signature = measure.signature;
     return (signature[0] * 4) / signature[1];
   });
+}
+
+/** The tempo played the longest (songs can change tempo) */
+function mainTempo(tempos: { measure: number; bpm: number }[], lengths: number[]) {
+  const sorted = [...tempos].sort((a, b) => a.measure - b.measure);
+  const time = new Map<number, number>();
+  sorted.forEach((tempo, i) => {
+    const end = sorted[i + 1]?.measure ?? lengths.length;
+    const beats = lengths.slice(tempo.measure, end).reduce((a, b) => a + b, 0);
+    time.set(tempo.bpm, (time.get(tempo.bpm) ?? 0) + beats);
+  });
+  return [...time.entries()].reduce<[number, number] | null>(
+    (best, entry) => (!best || entry[1] > best[1] ? entry : best),
+    null
+  )?.[0];
+}
+
+type PlayedNote = { start: number; length: number; midi: number; velocity: number };
+
+/** Every note of a track, in quarter notes from the start (tied notes are held) */
+function readNotes(track: SongsterrTrack, measureStarts: number[]) {
+  const tuning = track.tuning ?? [];
+  const capo = track.capo ?? 0;
+  const notes: PlayedNote[] = [];
+  (track.measures ?? []).forEach((measure, m) => {
+    if (m >= measureStarts.length) return;
+    (measure.voices ?? []).forEach((voice) => {
+      let time = measureStarts[m];
+      // the note sounding on each string (a tied note goes on)
+      (voice.beats ?? []).forEach((beat) => {
+        const length = beatLength(beat);
+        if (!beat.rest) {
+          (beat.notes ?? []).forEach((note) => {
+            if (note.rest || note.dead || tuning[note.string] === undefined) return;
+            const midi = tuning[note.string] + note.fret + capo;
+            const held = note.tie
+              ? [...notes]
+                  .reverse()
+                  .find((n) => n.midi === midi && n.start + n.length >= time - 1e-3)
+              : undefined;
+            if (held) {
+              held.length = time + length - held.start;
+              return;
+            }
+            let velocity = 90;
+            if (note.ghost) velocity = 50;
+            if (note.accentuated) velocity = 115;
+            notes.push({ start: time, length: Math.max(length, 0.1), midi, velocity });
+          });
+        }
+        time += length;
+      });
+    });
+  });
+  return notes.sort((a, b) => a.start - b.start);
 }
 
 // Krumhansl-Schmuckler key profiles
@@ -176,70 +293,79 @@ function findChord(weights: number[], bass: number | null, key: { tonic: number;
   return { root, quality };
 }
 
-/** A song from the tracks of a Songsterr song (rhythm guitar first, then bass) */
-export function songFromSongsterr(
-  song: SongsterrSong,
-  tracks: SongsterrTrack[],
-  url: string
-): Omit<ImportedSong, 'id'> | { error: string } {
-  const main = tracks[0];
-  if (!main?.measures?.length) return { error: 'No notes found in this Songsterr song' };
-  const lengths = measureLengths(main.measures);
-
-  // parts of each measure: halves of 4/4 measures, whole shorter ones
-  const segments: { start: number; length: number; weights: number[]; bass: number[] }[] = [];
-  const measureStarts: number[] = [];
-  let position = 0;
-  lengths.forEach((length) => {
-    measureStarts.push(position);
-    const parts = length >= 4 && length % 2 === 0 ? 2 : 1;
-    for (let p = 0; p < parts; p += 1) {
-      segments.push({
-        start: position + (p * length) / parts,
-        length: length / parts,
-        weights: new Array(12).fill(0),
-        bass: new Array(12).fill(0),
-      });
-    }
-    position += length;
-  });
-
-  const segmentAt = (time: number) =>
-    segments.find((s) => time >= s.start - 1e-6 && time < s.start + s.length - 1e-6);
-
-  // chord names written in the tab (if any) take over
-  const writtenChords = new Map<number, string>();
-  const totalWeights = new Array(12).fill(0);
-
-  tracks.forEach((track, trackIndex) => {
-    const isBass = trackIndex > 0;
-    const tuning = track.tuning ?? [];
-    const capo = track.capo ?? 0;
-    (track.measures ?? []).forEach((measure, m) => {
-      if (m >= measureStarts.length) return;
-      (measure.voices ?? []).forEach((voice) => {
-        let time = measureStarts[m];
-        (voice.beats ?? []).forEach((beat) => {
-          const length = beatLength(beat);
-          const segment = segmentAt(time);
-          if (segment && !isBass && beat.chord?.text)
-            writtenChords.set(segment.start, beat.chord.text);
-          if (segment && !beat.rest) {
-            (beat.notes ?? [])
-              .filter((note) => !note.rest && !note.dead && tuning[note.string] !== undefined)
-              .forEach((note) => {
-                const pc = (tuning[note.string] + note.fret + capo) % 12;
-                // the bass counts for the root, and a little for the harmony
-                segment.weights[pc] += isBass ? length * 0.5 : length;
-                if (isBass) segment.bass[pc] += length;
-                totalWeights[pc] += length;
-              });
-          }
-          time += length;
-        });
-      });
+/** Chord names written in a track, with when they start */
+function readWrittenChords(track: SongsterrTrack, measureStarts: number[]) {
+  const written: { time: number; name: string }[] = [];
+  (track.measures ?? []).forEach((measure, m) => {
+    let time = measureStarts[m] ?? 0;
+    (measure.voices?.[0]?.beats ?? []).forEach((beat) => {
+      const name = beat.chord?.text ? readChordName(beat.chord.text) : null;
+      if (name) written.push({ time, name });
+      time += beatLength(beat);
     });
   });
+  return written;
+}
+
+/** Rounded to a thousandth of a beat (smaller settings) */
+const round = (n: number) => Math.round(n * 1000) / 1000;
+
+/**
+ * A song from the tracks of a Songsterr song, with their role (rhythm guitar, bass,
+ * lead guitar, vocal melody)
+ */
+export function songFromSongsterr(
+  song: SongsterrSong,
+  tracks: { role: SongPartRole; name: string; track: SongsterrTrack }[],
+  url: string
+): Omit<ImportedSong, 'id'> | { error: string } {
+  const main = tracks.find((t) => t.role === 'rhythm')?.track ?? tracks[0]?.track;
+  if (!main?.measures?.length) return { error: 'No notes found in this Songsterr song' };
+  const lengths = measureLengths(main.measures);
+  const measureStarts: number[] = [];
+  lengths.reduce((position, length) => {
+    measureStarts.push(position);
+    return position + length;
+  }, 0);
+
+  const notesOf = new Map(
+    tracks.map(({ role, track }) => [role, readNotes(track, measureStarts)] as const)
+  );
+
+  // parts of each measure: halves of 4/4 measures, whole shorter ones
+  const segments = lengths.flatMap((length, m) => {
+    const count = length >= 4 && length % 2 === 0 ? 2 : 1;
+    return Array.from({ length: count }, (_, p) => ({
+      start: measureStarts[m] + (p * length) / count,
+      length: length / count,
+      weights: new Array(12).fill(0) as number[],
+      bass: new Array(12).fill(0) as number[],
+    }));
+  });
+
+  // harmony: the rhythm guitar (or the lead if there is no rhythm guitar) and the bass
+  const harmony = notesOf.get('rhythm') ?? notesOf.get('lead') ?? [];
+  const bassNotes = notesOf.get('bass') ?? [];
+  const totalWeights = new Array(12).fill(0);
+  const addWeights = (notes: PlayedNote[], isBass: boolean) =>
+    notes.forEach((note) => {
+      const pc = note.midi % 12;
+      totalWeights[pc] += note.length;
+      segments.forEach((segment) => {
+        const overlap =
+          Math.min(note.start + note.length, segment.start + segment.length) -
+          Math.max(note.start, segment.start);
+        if (overlap <= 0) return;
+        // the bass counts for the root, and a little for the harmony
+        segment.weights[pc] += isBass ? overlap * 0.5 : overlap;
+        if (isBass) segment.bass[pc] += overlap;
+      });
+    });
+  addWeights(harmony, false);
+  addWeights(bassNotes, true);
+
+  const key = findKey(totalWeights);
+  const names = FLAT_MAJORS.includes(key.minor ? (key.tonic + 3) % 12 : key.tonic) ? FLATS : SHARPS;
 
   // section markers (Intro, Verse 1, Chorus...) and when they start
   const markers = main.measures
@@ -250,34 +376,53 @@ export function songFromSongsterr(
     .filter((marker): marker is { name: string; time: number } => !!marker?.name);
   const sectionTimes = markers.map((marker) => marker.time);
 
-  const key = findKey(totalWeights);
-  const names = FLAT_MAJORS.includes(key.minor ? (key.tonic + 3) % 12 : key.tonic) ? FLATS : SHARPS;
+  // chords: the ones written in the tab (enough of them), or found from the notes
+  // (written in the rhythm guitar, about one every 2 bars or more, from where it starts playing)
+  const written = readWrittenChords(main, measureStarts);
+  const playedFrom = harmony[0]?.start ?? 0;
+  const useWritten =
+    written.length >= Math.max(4, lengths.length / 2) && written[0].time <= playedFrom + 8;
+  const timeline: { time: number; name: string | null }[] = useWritten
+    ? written
+    : segments.map((segment) => {
+        const bassMax = Math.max(...segment.bass);
+        const bass = bassMax > 0 ? segment.bass.indexOf(bassMax) : null;
+        const found = findChord(segment.weights, bass, key);
+        return {
+          time: segment.start,
+          name: found ? `${names[found.root]}${found.quality}` : null,
+        };
+      });
+  // a new section starts on its own chord
+  const songEnd = measureStarts[measureStarts.length - 1] + lengths[lengths.length - 1];
+  const changes = [...timeline, ...sectionTimes.map((time) => ({ time, name: undefined }))].sort(
+    (a, b) => a.time - b.time
+  );
 
-  // a chord per part of a measure, the same chord in a row is held
   const chords: string[] = [];
   const beats: number[] = [];
   const chordStarts: number[] = [];
-  segments.forEach((segment) => {
-    const bassMax = Math.max(...segment.bass);
-    const bass = bassMax > 0 ? segment.bass.indexOf(bassMax) : null;
-    const found = findChord(segment.weights, bass, key);
-    const name =
-      writtenChords.get(segment.start) ?? (found ? `${names[found.root]}${found.quality}` : null);
+  let current: string | null = null;
+  changes.forEach((change, i) => {
+    const end = changes[i + 1]?.time ?? songEnd;
+    if (end - change.time <= 1e-6 && change.name === undefined) return;
+    const isSection = change.name === undefined;
+    const name = isSection ? current : change.name;
+    current = name ?? current;
     if (!name) {
       // silence: the chord before goes on (nothing before: the song has not started)
-      if (beats.length) beats[beats.length - 1] += segment.length;
+      if (beats.length) beats[beats.length - 1] += end - change.time;
       return;
     }
-    // the same chord goes on (but a new section starts on its own chord)
-    const sectionStarts = sectionTimes.includes(segment.start);
-    if (chords.length && chords[chords.length - 1] === name && !sectionStarts) {
-      beats[beats.length - 1] += segment.length;
+    if (!isSection && chords.length && chords[chords.length - 1] === name) {
+      beats[beats.length - 1] += end - change.time;
     } else {
       chords.push(name);
-      beats.push(segment.length);
-      chordStarts.push(segment.start);
+      beats.push(end - change.time);
+      chordStarts.push(change.time);
     }
   });
+  if (!chords.length) return { error: 'No chords found in this Songsterr song' };
 
   // sections: the first chord at or after each marker
   const sections = markers
@@ -288,20 +433,45 @@ export function songFromSongsterr(
         section.start >= 0 && !all.slice(i + 1).some((x) => x.start === section.start)
     );
 
-  if (!chords.length) return { error: 'No chords found in this Songsterr song' };
+  // the song starts with its first note (an intro plays before the first chord)
+  const firstChord = chordStarts[0];
+  const firstNote = Math.min(
+    firstChord,
+    ...[...notesOf.values()].map((notes) => notes[0]?.start ?? Infinity)
+  );
+  const parts = tracks
+    .map(({ role, name }) => ({
+      role,
+      name,
+      notes: (notesOf.get(role) ?? [])
+        .filter((note) => note.start >= firstNote - 1e-6)
+        .slice(0, MAX_PART_NOTES)
+        .flatMap((note) => [
+          round(note.start - firstNote),
+          round(note.length),
+          note.midi,
+          note.velocity,
+        ]),
+    }))
+    .filter((part) => part.notes.length);
 
   const firstSignature = main.measures.find((m) => m.signature)?.signature ?? [4, 4];
   const beatsPerBar = (firstSignature[0] * 4) / firstSignature[1];
-  const tempo = tracks.flatMap((t) => t.automations?.tempo ?? [])[0]?.bpm;
+  const tempo = mainTempo(
+    tracks.find(({ track }) => track.automations?.tempo?.length)?.track.automations?.tempo ?? [],
+    lengths
+  );
 
   return {
     title: [song.title, song.artist].filter(Boolean).join(' by ') || 'Songsterr song',
     key: `${names[key.tonic]}${key.minor ? 'm' : ''}`,
     chords,
-    beats: beats.map((b) => Math.round(b * 1000) / 1000),
+    beats: beats.map(round),
     ...(beatsPerBar !== 4 && beatsPerBar > 0 ? { beatsPerBar } : {}),
     ...(tempo && tempo > 0 ? { bpm: Math.round(tempo) } : {}),
     url,
     ...(sections.length ? { sections } : {}),
+    ...(firstChord - firstNote > 1e-6 ? { leadIn: round(firstChord - firstNote) } : {}),
+    ...(parts.length ? { parts } : {}),
   };
 }

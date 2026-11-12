@@ -403,4 +403,5 @@ export const getSongRhythm = (song: PlayableSong) => ({
   beatsPerBar: song.imported?.beatsPerBar ?? song.song?.beatsPerBar,
   beatsPerHit: song.imported?.beatsPerHit,
   bpm: song.imported?.bpm,
+  leadIn: song.imported?.leadIn,
 });

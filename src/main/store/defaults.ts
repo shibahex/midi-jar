@@ -6,6 +6,7 @@ import {
   KeyboardSettings,
   NotationSettings,
   RhythmGameSettings,
+  SongPartRole,
   ScaleDegreesSettings,
   ScaleQuizSettings,
 } from 'main/types';
@@ -114,6 +115,7 @@ export const defaultRhythmGameSettings: RhythmGameSettings = {
   practiceLoop: false,
   practiceRamp: false,
   sound: 'chords' as const,
+  songParts: ['rhythm', 'bass', 'lead', 'melody'] as SongPartRole[],
 };
 
 export const defaultScaleDegreesSettings: ScaleDegreesSettings = {

@@ -432,7 +432,6 @@
                 "customSongs": {
                     "description": "songs imported from chord sheets or web pages (chords in their key)",
                     "items": {
-                        "description": "A song imported from a ChordPro file or a chord sheet",
                         "properties": {
                             "beats": {
                                 "description": "length of each chord in beats (from bar lines), one bar each if not given",
@@ -466,6 +465,39 @@
                             "key": {
                                 "description": "key of the song, e.g. \"G\" or \"Em\" (from the file, or the first chord)",
                                 "type": "string"
+                            },
+                            "leadIn": {
+                                "description": "beats of intro before the first chord",
+                                "type": "number"
+                            },
+                            "parts": {
+                                "description": "notes of the instruments (rhythm guitar, bass, lead, melody), to hear the real song",
+                                "items": {
+                                    "description": "The notes of a part: flat [start, length, midi, velocity, ...] in beats from the song start",
+                                    "properties": {
+                                        "name": {
+                                            "type": "string"
+                                        },
+                                        "notes": {
+                                            "items": {
+                                                "type": "number"
+                                            },
+                                            "type": "array"
+                                        },
+                                        "role": {
+                                            "description": "Parts of a song played by the built-in sound (Songsterr songs)",
+                                            "enum": [
+                                                "bass",
+                                                "lead",
+                                                "melody",
+                                                "rhythm"
+                                            ],
+                                            "type": "string"
+                                        }
+                                    },
+                                    "type": "object"
+                                },
+                                "type": "array"
                             },
                             "sections": {
                                 "description": "parts of the song (verse, chorus...): their name and the index of their first chord",
@@ -567,6 +599,20 @@
                         "random"
                     ],
                     "type": "string"
+                },
+                "songParts": {
+                    "description": "built-in sound: the parts of Songsterr songs heard (the rhythm guitar replaces the chords)",
+                    "items": {
+                        "description": "Parts of a song played by the built-in sound (Songsterr songs)",
+                        "enum": [
+                            "bass",
+                            "lead",
+                            "melody",
+                            "rhythm"
+                        ],
+                        "type": "string"
+                    },
+                    "type": "array"
                 },
                 "songTempo": {
                     "description": "songs with a tempo of their own (imported) are played at it",

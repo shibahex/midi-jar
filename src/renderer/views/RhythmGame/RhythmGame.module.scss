@@ -375,3 +375,38 @@ $green: #2ecc40;
   font-weight: normal;
   opacity: 0.85;
 }
+
+/** Parts of the song heard **/
+
+.parts {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 0.4em;
+}
+
+.partsLabel {
+  margin-right: 0.2em;
+  font-size: 0.85em;
+  opacity: 0.7;
+}
+
+.part {
+  padding: 0.2em 0.8em;
+  border: 1px solid rgba($color-white, 0.2);
+  border-radius: 999px;
+  background: transparent;
+  color: rgba($color-white, 0.55);
+  font: inherit;
+  font-size: 0.85em;
+  text-decoration: line-through;
+  cursor: pointer;
+
+  &--on {
+    border-color: $color-primary-light;
+    background: rgba($color-primary-normal, 0.45);
+    color: $color-white;
+    text-decoration: none;
+  }
+}

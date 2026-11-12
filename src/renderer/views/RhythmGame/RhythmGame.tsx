@@ -23,13 +23,15 @@ import {
   PlayableSong,
 } from 'renderer/helpers';
 
-import { synth } from 'renderer/helpers/synth';
+import { Instrument, synth } from 'renderer/helpers/synth';
+import { SongPart, SongPartRole } from 'main/types';
 
 import ChordQuizKeyboard from '../ChordQuiz/ChordQuizKeyboard';
 import PracticePanel from './PracticePanel';
 import {
   BEATS_PER_BAR,
   buildHits,
+  buildPartEvents,
   getBeatMs,
   getSectionChords,
   getSections,
@@ -62,6 +64,26 @@ function getGuideNotes(hit: Hit) {
   return [base - 12, ...getChordVoicing(hit.chord.intervals).map((s) => base + s)];
 }
 
+/** the sound of each part of a song */
+const PART_INSTRUMENTS: Record<SongPartRole, Instrument> = {
+  rhythm: 'keys',
+  bass: 'bass',
+  lead: 'lead',
+  melody: 'voice',
+};
+
+/** song part notes are scheduled this far ahead (ms), to be played exactly on time */
+const LOOKAHEAD_MS = 150;
+
+const ALL_PARTS: SongPartRole[] = ['rhythm', 'bass', 'lead', 'melody'];
+
+const PART_NAMES: Record<SongPartRole, string> = {
+  rhythm: 'Rhythm guitar',
+  bass: 'Bass',
+  lead: 'Lead guitar',
+  melody: 'Melody',
+};
+
 const LABELS: Record<HitResult, string> = { perfect: 'PERFECT!', good: 'Good', miss: 'Miss' };
 
 type Round = {
@@ -70,6 +92,8 @@ type Round = {
   chords: RhythmChord[];
   rhythm: SongRhythm;
   sections: Section[];
+  /** notes of the instruments (Songsterr songs) */
+  parts: SongPart[];
   tempo: number;
   beatsPerBar: number;
   noSongTempo: boolean;
@@ -126,6 +150,7 @@ const RhythmGame: React.FC = () => {
           keyLabel: getImportedSongKey(song.imported),
           chords,
           sections: getSections(chords, beatsPerBar, song.imported.sections),
+          parts: song.imported.parts ?? [],
           ...timing,
         };
       }
@@ -144,6 +169,7 @@ const RhythmGame: React.FC = () => {
         keyLabel: `${formatSharpsFlats(tonic)} ${mode}`,
         chords,
         sections: getSections(chords, beatsPerBar),
+        parts: [],
         ...timing,
       };
     },
@@ -173,7 +199,8 @@ const RhythmGame: React.FC = () => {
         getSectionChords(r.chords, r.sections, first, last),
         (r.tempo * speed) / 100,
         pattern,
-        r.rhythm
+        // the intro plays only when starting from the first section
+        { ...r.rhythm, leadIn: first === 0 ? r.rhythm.leadIn : 0 }
       ),
     [pattern]
   );
@@ -211,6 +238,31 @@ const RhythmGame: React.FC = () => {
   // built-in sound: the chords of the song, a click on the beat
   const sound = gameSettings.sound ?? 'chords';
   const sounded = useRef(new Set<number>());
+  // the parts of the song heard (the rhythm guitar replaces the chords)
+  const songParts = (gameSettings.songParts ?? ALL_PARTS).join(',');
+  const partEvents = useMemo(() => {
+    // the beats of the chosen sections, from the song start (after its intro)
+    const beatOfChord = (index: number) =>
+      (round.rhythm.leadIn ?? 0) +
+      round.chords
+        .slice(0, index)
+        .reduce((sum, chord) => sum + (chord.beats ?? round.beatsPerBar), 0);
+    const nextSection = round.sections[range.last + 1];
+    return buildPartEvents(
+      round.parts,
+      songParts.split(',') as SongPartRole[],
+      (round.tempo * speed) / 100,
+      round.beatsPerBar,
+      range.first === 0 ? 0 : beatOfChord(round.sections[range.first]?.start ?? 0),
+      nextSection ? beatOfChord(nextSection.start) : Infinity
+    );
+  }, [round, songParts, range, speed]);
+  const partEventsRef = useRef(partEvents);
+  partEventsRef.current = partEvents;
+  const playsRhythmPart = partEvents.some((e) => e.role === 'rhythm');
+  const playsRhythmPartRef = useRef(playsRhythmPart);
+  playsRhythmPartRef.current = playsRhythmPart;
+  const partCursor = useRef(0);
   const lastBeat = useRef(-1);
   // listening: the song plays by itself, nothing is judged
   const [listening, setListening] = useState(false);
@@ -253,6 +305,7 @@ const RhythmGame: React.FC = () => {
     listeningRef.current = listen;
     sounded.current = new Set();
     lastBeat.current = -1;
+    partCursor.current = 0;
     setCombo(0);
     setBestCombo(0);
     setScore(0);
@@ -300,12 +353,35 @@ const RhythmGame: React.FC = () => {
           lastBeat.current = beatNow;
           synth.click(beatNow % beatsPerBar === 0);
         }
-        if (listeningRef.current || sound === 'chords' || sound === 'both') {
+        const playsSong = listeningRef.current || sound === 'chords' || sound === 'both';
+        // the parts of the song: notes coming soon are scheduled on the audio clock
+        if (playsSong) {
+          const events = partEventsRef.current;
+          while (
+            partCursor.current < events.length &&
+            events[partCursor.current].time < t + LOOKAHEAD_MS * rateRef.current
+          ) {
+            const event = events[partCursor.current];
+            partCursor.current += 1;
+            // notes long gone (the song was paused) are not played late
+            if (event.time >= t - 50) {
+              synth.play(
+                [event.midi],
+                event.duration / rateRef.current / 1000,
+                event.velocity,
+                (event.time - t) / rateRef.current / 1000,
+                PART_INSTRUMENTS[event.role]
+              );
+            }
+          }
+        }
+        if (playsSong) {
           const due = hitsRef.current.filter((h) => t >= h.time && !sounded.current.has(h.id));
           due.forEach((h) => {
             sounded.current.add(h.id);
-            // a chord reached long ago (the song was paused) is not played late
-            if (t - h.time > 150) return;
+            // a chord reached long ago (the song was paused) is not played late,
+            // the rhythm guitar of the song plays the chords itself
+            if (t - h.time > 150 || playsRhythmPartRef.current) return;
             const seconds = ((h.length * beatMs) / rateRef.current / 1000) * 0.85;
             synth.play(getGuideNotes(h), seconds, h.chordStart ? 95 : 70);
           });
@@ -335,8 +411,14 @@ const RhythmGame: React.FC = () => {
         setRate(rateRef.current);
       }
 
+      // the song ends after its last chord and its last note
       const last = hitsRef.current[hitsRef.current.length - 1];
-      if (last && t > last.time + last.length * beatMs) {
+      const lastNote = partEventsRef.current[partEventsRef.current.length - 1];
+      const end = Math.max(
+        last ? last.time + last.length * beatMs : 0,
+        lastNote ? lastNote.time + lastNote.duration : 0
+      );
+      if (last && t > end) {
         setPhase('done');
         return;
       }
@@ -502,6 +584,34 @@ const RhythmGame: React.FC = () => {
     />
   );
 
+  // the parts of the song heard (Songsterr songs), switched on and off with a click
+  const enabledParts = songParts.split(',') as SongPartRole[];
+  const partToggles = round.parts.length > 0 && (
+    <div className={cx('parts')} role="group" aria-label="Parts heard">
+      <span className={cx('partsLabel')}>Hear</span>
+      {round.parts.map((part) => {
+        const on = enabledParts.includes(part.role);
+        return (
+          <button
+            key={part.role}
+            type="button"
+            className={cx('part', { 'part--on': on })}
+            aria-pressed={on}
+            title={part.name}
+            onClick={() =>
+              updateSetting(
+                'rhythmGame.songParts',
+                on ? enabledParts.filter((r) => r !== part.role) : [...enabledParts, part.role]
+              )
+            }
+          >
+            {PART_NAMES[part.role]}
+          </button>
+        );
+      })}
+    </div>
+  );
+
   const songPicker = (
     <Select
       className={cx('songPicker')}
@@ -639,6 +749,7 @@ const RhythmGame: React.FC = () => {
             Release the keys between chords, even when a chord is repeated.
           </div>
           {practice}
+          {partToggles}
           <div className={cx('buttons')}>
             {songPicker}
             <Button
