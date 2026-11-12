@@ -345,6 +345,8 @@ class Synth {
 
   private volume = 0.7;
 
+  private muted = false;
+
   private style: SoundStyle = 'classical';
 
   private channels = new Map<Channel, GainNode>();
@@ -375,7 +377,7 @@ class Synth {
       const compressor = this.context.createDynamicsCompressor();
       compressor.connect(this.context.destination);
       this.master = this.context.createGain();
-      this.master.gain.value = this.volume;
+      this.master.gain.value = this.muted ? 0 : this.volume;
       this.master.connect(compressor);
       // reverb: sent from the master, mixed back in
       const reverb = this.context.createConvolver();
@@ -406,7 +408,13 @@ class Synth {
   /** Volume from 0 to 1 */
   setVolume(volume: number) {
     this.volume = Math.max(0, Math.min(1, volume));
-    if (this.master) this.master.gain.value = this.volume;
+    if (this.master) this.master.gain.value = this.muted ? 0 : this.volume;
+  }
+
+  /** Silences everything for a while (the volume is kept) */
+  setMuted(muted: boolean) {
+    this.muted = muted;
+    if (this.master) this.master.gain.value = muted ? 0 : this.volume;
   }
 
   /** Volume of a part, from 0 to 1 */

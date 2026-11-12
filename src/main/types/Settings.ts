@@ -80,7 +80,7 @@ export type ImportedSong = {
     durationMs?: number;
     firstChordMs?: number;
     /** how the first chord was found: estimated, tapped, or corrected from the playing */
-    syncedBy?: 'estimate' | 'tap' | 'playing';
+    syncedBy?: 'estimate' | 'tap' | 'playing' | 'listening';
   };
 };
 
@@ -163,6 +163,12 @@ export type RhythmGameSettings = {
   spotifyClientId: string;
   /** Spotify: songs linked to Spotify play there, in time with the game */
   spotifySync: boolean;
+  /** Spotify: the song is listened to (a sound input) to sync it */
+  listenSync: boolean;
+  /** the sound input listened to ("": the sound of the computer when it can, or the default) */
+  syncInput: string;
+  /** what the player plays: the chords, or the notes of a part of the song */
+  playPart: 'chords' | SongPartRole;
 };
 
 export type ScaleSet =

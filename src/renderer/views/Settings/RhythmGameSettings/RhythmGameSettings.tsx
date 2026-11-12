@@ -273,14 +273,16 @@ const RhythmGameSettings: React.FC = () => {
           <FormField label="Song" hint="Play one song, or random songs">
             <Select
               options={[
-                { value: '', label: 'Random song' },
+                { value: 'random', label: 'Random song' },
                 ...getAllSongs(importedSongs).map((song) => ({
                   value: song.id,
                   label: song.title,
                 })),
               ]}
-              onChange={(value) => updateSetting('rhythmGame.song', value)}
-              value={game.song ?? ''}
+              onChange={(value) =>
+                updateSetting('rhythmGame.song', value === 'random' ? '' : value)
+              }
+              value={game.song ?? ('' || 'random')}
             />
           </FormField>
 
@@ -337,6 +339,17 @@ const RhythmGameSettings: React.FC = () => {
               options={fields.pattern.choices}
               onChange={(value) => updateSetting('rhythmGame.pattern', value)}
               value={game.pattern ?? 'song'}
+            />
+          </FormField>
+
+          <FormField
+            label="You Play"
+            hint="The chords, or the notes of a part of Songsterr songs (like picking guitar or bass). Songs without that part are played with chords."
+          >
+            <Select
+              options={fields.playPart.choices}
+              onChange={(value) => updateSetting('rhythmGame.playPart', value)}
+              value={game.playPart ?? 'chords'}
             />
           </FormField>
 

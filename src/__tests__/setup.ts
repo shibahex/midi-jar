@@ -7,6 +7,11 @@ window.os = {
 window.app = {
   quit: jest.fn(),
   fetchPage: jest.fn(),
+  sound: {
+    start: jest.fn(),
+    stop: jest.fn(),
+    onData: jest.fn(),
+  },
   spotify: {
     login: jest.fn(),
     logout: jest.fn(),
