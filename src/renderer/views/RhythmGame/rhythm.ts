@@ -156,6 +156,6 @@ export function buildPartEvents(
       })
     )
     .filter((event) => event.start >= fromBeat - 1e-6 && event.start < toBeat - 1e-6)
-    .map(({ start, ...event }) => event)
+    .map(({ time, duration, midi, velocity, role }) => ({ time, duration, midi, velocity, role }))
     .sort((a, b) => a.time - b.time);
 }
