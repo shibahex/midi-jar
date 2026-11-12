@@ -299,3 +299,7 @@ ipcMain.handle(
   spotifyCall((query: string) => spotify.search(query))
 );
 ipcMain.handle('spotify:redirectUri', () => spotify.SPOTIFY_REDIRECT_URI);
+ipcMain.handle(
+  'spotify:bars',
+  spotifyCall((uri: string) => spotify.getBars(uri))
+);

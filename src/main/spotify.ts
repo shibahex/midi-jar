@@ -242,6 +242,20 @@ export const pause = () => api('/me/player/pause', { method: 'PUT' });
 export const seek = (positionMs: number) =>
   api(`/me/player/seek?position_ms=${Math.max(0, Math.round(positionMs))}`, { method: 'PUT' });
 
+/**
+ * Where the bars start in a track (ms), from Spotify's audio analysis, or null: Spotify
+ * no longer gives it to apps created after November 2024
+ */
+export async function getBars(uri: string): Promise<number[] | null> {
+  try {
+    const data = await api(`/audio-analysis/${uri.split(':').pop()}`);
+    const bars = (data?.bars ?? []) as { start: number }[];
+    return bars.length ? bars.map((bar) => Math.round(bar.start * 1000)) : null;
+  } catch (e) {
+    return null;
+  }
+}
+
 /** The first track found for a song name, or null */
 export async function search(query: string): Promise<SpotifyTrack | null> {
   const data = await api(`/search?type=track&limit=1&q=${encodeURIComponent(query)}`);

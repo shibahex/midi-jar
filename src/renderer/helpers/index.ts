@@ -13,3 +13,4 @@ export * from './melodies';
 export * from './songs';
 export * from './solo';
 export * from './songsterr';
+export * from './spotifySync';

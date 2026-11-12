@@ -17,6 +17,7 @@ window.app = {
     seek: jest.fn(),
     search: jest.fn(),
     redirectUri: jest.fn(),
+    bars: jest.fn(),
   },
   settings: {
     clear: jest.fn(),

@@ -9,8 +9,10 @@ import { Icon } from 'renderer/components';
 import {
   formatSharpsFlats,
   getBestScaleForChroma,
+  estimateFirstChordMs,
   getAllSongs,
   getChordVoicing,
+  medianOffset,
   getIncludedSongs,
   getRelativeScale,
   getScaleInfo,
@@ -225,6 +227,9 @@ const RhythmGame: React.FC = () => {
   const spotifyTiming = useRef({ songStartMs: 0, countInMs: 0, synced: false });
   // syncing: tap on the first chord while Spotify plays the song
   const [calibrating, setCalibrating] = useState(false);
+  // how early or late each chord was played (ms): a synced song is corrected from them
+  const hitOffsets = useRef<number[]>([]);
+  const [syncAdjust, setSyncAdjust] = useState<number | null>(null);
 
   // a song synced with Spotify cannot wait or slow down on a miss
   const onMiss =
@@ -301,6 +306,8 @@ const RhythmGame: React.FC = () => {
     setWaiting(null);
     setSpotifyMessage('');
     spotifyPlayer.current = null;
+    hitOffsets.current = [];
+    setSyncAdjust(null);
     const link = next.song.imported?.spotify;
     if (spotifyOnRef.current && link?.firstChordMs !== undefined) {
       // where the song starts in the recording (its intro before the first chord)
@@ -367,23 +374,52 @@ const RhythmGame: React.FC = () => {
       .catch((e) => setSpotifyMessage(`${errorText(e)}: start it from the beginning in Spotify`));
   };
 
+  /** Saves where the first chord of the song is in the Spotify recording */
+  const saveSync = useCallback(
+    (firstChordMs: number, syncedBy: 'estimate' | 'tap' | 'playing') => {
+      const songId = round.song.id;
+      updateSetting(
+        'rhythmGame.customSongs',
+        (gameSettings.customSongs ?? []).map((song) =>
+          song.id === songId && song.spotify
+            ? {
+                ...song,
+                spotify: { ...song.spotify, firstChordMs: Math.round(firstChordMs), syncedBy },
+              }
+            : song
+        )
+      );
+    },
+    [round, gameSettings.customSongs, updateSetting]
+  );
+
+  /** Syncs without tapping: estimated from the lengths of the recording and of the song */
+  const autoSync = async () => {
+    const song = round.song.imported;
+    if (!song?.spotify) return;
+    setSpotifyMessage('Syncing...');
+    try {
+      const durationMs =
+        song.spotify.durationMs ?? (await window.app.spotify.search(song.spotify.name))?.durationMs;
+      if (!durationMs) throw new Error('Spotify did not give the length of the song');
+      const bars = await window.app.spotify.bars(song.spotify.uri);
+      const firstChordMs = estimateFirstChordMs(song, durationMs, bars);
+      if (firstChordMs === null) throw new Error('This song has no tempo');
+      saveSync(firstChordMs, 'estimate');
+      setSpotifyMessage('');
+    } catch (e) {
+      setSpotifyMessage(errorText(e));
+    }
+  };
+
   const tap = useCallback(() => {
     const player = spotifyPlayer.current;
     const link = spotifyLinkRef.current;
     if (!player?.isPlaying || !link || player.uri !== link.uri) return;
-    const firstChordMs = Math.round(player.progressMs + (performance.now() - player.at));
-    const songId = round.song.id;
-    updateSetting(
-      'rhythmGame.customSongs',
-      (gameSettings.customSongs ?? []).map((song) =>
-        song.id === songId && song.spotify
-          ? { ...song, spotify: { ...song.spotify, firstChordMs } }
-          : song
-      )
-    );
+    saveSync(player.progressMs + (performance.now() - player.at), 'tap');
     setCalibrating(false);
     window.app.spotify.pause().catch(() => {});
-  }, [round, gameSettings.customSongs, updateSetting]);
+  }, [saveSync]);
 
   // syncing: Space (or Enter) taps, Esc gives up
   useEffect(() => {
@@ -401,6 +437,14 @@ const RhythmGame: React.FC = () => {
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [calibrating, tap]);
+
+  // the sync is corrected after a game played with Spotify
+  useEffect(() => {
+    const firstChordMs = spotifyLinkRef.current?.firstChordMs;
+    if (syncAdjust === null || firstChordMs === undefined) return;
+    saveSync(firstChordMs + syncAdjust, 'playing');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [syncAdjust]);
 
   /** Stops the song (and Spotify) */
   const stop = useCallback(() => {
@@ -528,6 +572,16 @@ const RhythmGame: React.FC = () => {
       if (last && t > end) {
         setPhase('done');
         if (spotifyOnRef.current) window.app.spotify.pause().catch(() => {});
+        // played in time with the recording: chords played late mean it is later than thought
+        const offset = medianOffset(hitOffsets.current);
+        if (
+          spotifyOnRef.current &&
+          !listeningRef.current &&
+          offset !== null &&
+          Math.abs(offset) >= 30
+        ) {
+          setSyncAdjust(Math.round(offset));
+        }
         return;
       }
       frame = requestAnimationFrame(tick);
@@ -580,8 +634,10 @@ const RhythmGame: React.FC = () => {
     if (!target || !matchesChord(target.chromas, playedMidiNotes)) return;
 
     // judged in real time
-    const result = judge((t - target.time) / rateRef.current);
+    const offset = (t - target.time) / rateRef.current;
+    const result = judge(offset);
     if (result) {
+      hitOffsets.current.push(offset);
       armed.current = false;
       // every 4 hits in a row: back up to speed after slowing down, or faster when speeding up
       if ((comboRef.current + 1) % 4 === 0) {
@@ -817,14 +873,15 @@ const RhythmGame: React.FC = () => {
               <span>
                 Spotify: <strong>{spotifyLink?.name}</strong>
                 {spotifyOn ? '' : ' (not synced yet)'}
+                {spotifyMessage && !calibrating && ` · ${spotifyMessage}`}
               </span>
-              <Button
-                size="sm"
-                intent={spotifyOn ? 'neutral' : 'primary'}
-                variant={spotifyOn ? 'ghost' : undefined}
-                onClick={calibrate}
-              >
-                {spotifyOn ? 'Sync again' : 'Sync with Spotify'}
+              {!spotifyOn && (
+                <Button size="sm" intent="primary" onClick={autoSync}>
+                  Sync automatically
+                </Button>
+              )}
+              <Button size="sm" intent="neutral" variant="ghost" onClick={calibrate}>
+                Sync by tapping
               </Button>
             </div>
           )}
@@ -860,6 +917,12 @@ const RhythmGame: React.FC = () => {
               </>
             )}
           </div>
+          {syncAdjust !== null && (
+            <div className={cx('spotifyStatus')}>
+              Spotify sync corrected by {syncAdjust > 0 ? '+' : ''}
+              {syncAdjust} ms from your playing
+            </div>
+          )}
           {!listening && (
             <div className={cx('stats')}>
               <span className={cx('stat--perfect')}>Perfect {stats.perfect}</span>
