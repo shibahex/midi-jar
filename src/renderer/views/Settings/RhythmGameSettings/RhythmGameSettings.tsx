@@ -297,6 +297,48 @@ const RhythmGameSettings: React.FC = () => {
             />
           </FormField>
 
+          <div className={cx('group')}>
+            <div className={cx('groupTitle')}>
+              <Icon name="refresh" />
+              Practice
+            </div>
+            <div className={cx('groupHint')}>
+              On the game screen, switch to Practice to pick the sections of the song to play (click
+              the first one, then the last one), the speed and the loop.
+            </div>
+
+            <FormField label="Practice Speed" hint="Speed of the song in practice, in percent">
+              <Slider
+                value={game.practiceSpeed ?? 100}
+                onChange={(value: number) => updateSetting('rhythmGame.practiceSpeed', value)}
+                min={50}
+                max={150}
+                step={5}
+                marks={[50, 75, 100, 125, 150]}
+                valueText={`${game.practiceSpeed ?? 100}%`}
+              />
+            </FormField>
+
+            <FormControlLabel label="Loop" hint="Play the sections again and again" reverse>
+              <Switch
+                onChange={(value) => updateSetting('rhythmGame.practiceLoop', value)}
+                checked={!!game.practiceLoop}
+              />
+            </FormControlLabel>
+
+            <FormControlLabel
+              label="Speed Up Each Loop"
+              hint="5% faster after a loop with no miss, up to the real speed"
+              reverse
+            >
+              <Switch
+                onChange={(value) => updateSetting('rhythmGame.practiceRamp', value)}
+                checked={!!game.practiceRamp}
+                disabled={!game.practiceLoop}
+              />
+            </FormControlLabel>
+          </div>
+
           <FormControlLabel
             label="Speed Up"
             hint="The song gets faster as you play well: 5% every 4 chords in a row, up to 1.5 times the tempo"

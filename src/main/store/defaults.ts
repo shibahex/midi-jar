@@ -110,6 +110,9 @@ export const defaultRhythmGameSettings: RhythmGameSettings = {
   fingering: 'right' as const,
   onMiss: 'continue' as const,
   gamification: true,
+  practiceSpeed: 100,
+  practiceLoop: false,
+  practiceRamp: false,
 };
 
 export const defaultScaleDegreesSettings: ScaleDegreesSettings = {

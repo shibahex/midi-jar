@@ -528,6 +528,18 @@
                     ],
                     "type": "string"
                 },
+                "practiceLoop": {
+                    "description": "practice: the chosen sections are played again and again",
+                    "type": "boolean"
+                },
+                "practiceRamp": {
+                    "description": "practice: 5% faster after each loop with no miss, up to the real speed",
+                    "type": "boolean"
+                },
+                "practiceSpeed": {
+                    "description": "practice: speed of the song in percent of its tempo",
+                    "type": "number"
+                },
                 "showTitle": {
                     "description": "the song name is shown from the start, or revealed at the end",
                     "enum": [

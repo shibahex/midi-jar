@@ -123,6 +123,12 @@ export type RhythmGameSettings = {
   /** learning mode: on a miss, keep going, wait for the chord, or slow down */
   onMiss: 'continue' | 'wait' | 'slowDown';
   gamification: boolean;
+  /** practice: speed of the song in percent of its tempo */
+  practiceSpeed: number;
+  /** practice: the chosen sections are played again and again */
+  practiceLoop: boolean;
+  /** practice: 5% faster after each loop with no miss, up to the real speed */
+  practiceRamp: boolean;
 };
 
 export type ScaleSet =

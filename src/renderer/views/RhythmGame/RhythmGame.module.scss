@@ -320,6 +320,39 @@ $green: #2ecc40;
   text-align: left;
 }
 
+/** Practice **/
+
+.practice {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 0.5em 1em;
+}
+
+.practiceField {
+  display: flex;
+  align-items: center;
+  gap: 0.4em;
+  text-align: left;
+
+  > :last-child {
+    min-width: 9em;
+  }
+}
+
+.practiceSwitch {
+  display: flex;
+  align-items: center;
+  gap: 0.3em;
+  cursor: pointer;
+}
+
+.practiceInfo {
+  font-size: clamp(12px, min(2.2vh, 1.8vw), 20px);
+  color: $color-primary-light;
+}
+
 .stop {
   position: absolute;
   top: 0.5em;

@@ -115,3 +115,43 @@ const POINTS: Record<HitResult, number> = { perfect: 300, good: 100, miss: 0 };
 /** Points of a hit: a combo adds 10% per hit in a row, up to double */
 export const getHitPoints = (result: HitResult, combo: number) =>
   Math.round(POINTS[result] * Math.min(2, 1 + combo * 0.1));
+
+/** A part of a song to practice: its name and the index of its first chord */
+export type Section = { name: string; start: number };
+
+/** Bars in a section of a song that has no sections of its own */
+const BARS_PER_SECTION = 4;
+
+/**
+ * Sections of a song: its own (verse, chorus...), or every 4 bars ("Bars 1-4")
+ */
+export function getSections(
+  chords: RhythmChord[],
+  beatsPerBar: number,
+  sections: Section[] = []
+): Section[] {
+  const own = sections.filter((s) => s.start >= 0 && s.start < chords.length);
+  if (own.length) return own[0].start === 0 ? own : [{ name: 'Start', start: 0 }, ...own];
+
+  const result: Section[] = [];
+  let position = 0;
+  let lastGroup = -1;
+  chords.forEach((chord, index) => {
+    const bar = Math.floor(position / beatsPerBar + 1e-6);
+    const group = Math.floor(bar / BARS_PER_SECTION);
+    if (group > lastGroup) {
+      lastGroup = group;
+      const first = group * BARS_PER_SECTION + 1;
+      result.push({ name: `Bars ${first}-${first + BARS_PER_SECTION - 1}`, start: index });
+    }
+    position += chord.beats ?? beatsPerBar;
+  });
+  return result;
+}
+
+/** Chords of a range of sections (first to last, included) */
+export function getSectionChords<T>(chords: T[], sections: Section[], first: number, last: number) {
+  const from = sections[first]?.start ?? 0;
+  const to = sections[last + 1]?.start ?? chords.length;
+  return chords.slice(from, Math.max(from + 1, to));
+}

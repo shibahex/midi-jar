@@ -22,10 +22,13 @@ import {
 } from 'renderer/helpers';
 
 import ChordQuizKeyboard from '../ChordQuiz/ChordQuizKeyboard';
+import PracticePanel from './PracticePanel';
 import {
   BEATS_PER_BAR,
   buildHits,
   getBeatMs,
+  getSectionChords,
+  getSections,
   getHitPoints,
   GOOD_MS,
   Hit,
@@ -33,6 +36,7 @@ import {
   judge,
   matchesChord,
   RhythmChord,
+  Section,
   SongRhythm,
 } from './rhythm';
 
@@ -54,6 +58,7 @@ type Round = {
   keyLabel: string;
   chords: RhythmChord[];
   rhythm: SongRhythm;
+  sections: Section[];
   tempo: number;
   beatsPerBar: number;
   noSongTempo: boolean;
@@ -109,6 +114,7 @@ const RhythmGame: React.FC = () => {
           song,
           keyLabel: getImportedSongKey(song.imported),
           chords,
+          sections: getSections(chords, beatsPerBar, song.imported.sections),
           ...timing,
         };
       }
@@ -126,6 +132,7 @@ const RhythmGame: React.FC = () => {
         song,
         keyLabel: `${formatSharpsFlats(tonic)} ${mode}`,
         chords,
+        sections: getSections(chords, beatsPerBar),
         ...timing,
       };
     },
@@ -141,17 +148,35 @@ const RhythmGame: React.FC = () => {
     ]
   );
 
+  // practice: the sections played (first to last), and the speed in percent
+  const savedSpeed = gameSettings.practiceSpeed ?? 100;
+  // practice mode (chosen sections, speed, loop) or the whole song at full speed
+  const [practicing, setPracticing] = useState(false);
+  const practicingRef = useRef(practicing);
+  practicingRef.current = practicing;
+  const practiceLoop = practicing && !!gameSettings.practiceLoop;
+  const practiceRamp = !!gameSettings.practiceRamp;
   const makeHits = useCallback(
-    (r: Round) => buildHits(r.chords, r.tempo, pattern, r.rhythm),
+    (r: Round, first: number, last: number, speed: number) =>
+      buildHits(
+        getSectionChords(r.chords, r.sections, first, last),
+        (r.tempo * speed) / 100,
+        pattern,
+        r.rhythm
+      ),
     [pattern]
   );
 
   const [round, setRound] = useState<Round>(() => newRound());
   const { beatsPerBar } = round;
-  const beatMs = getBeatMs(round.tempo);
+  const [range, setRange] = useState({ first: 0, last: round.sections.length - 1 });
+  // the speed the song is played at (it changes when looping faster)
+  const [speed, setSpeed] = useState(100);
+  const [loop, setLoop] = useState(0);
+  const beatMs = getBeatMs((round.tempo * speed) / 100);
   const [phase, setPhase] = useState<Phase>('ready');
   const [now, setNow] = useState(0);
-  const [hits, setHits] = useState<Hit[]>(() => makeHits(round));
+  const [hits, setHits] = useState<Hit[]>(() => makeHits(round, 0, round.sections.length - 1, 100));
   const [combo, setCombo] = useState(0);
   const [bestCombo, setBestCombo] = useState(0);
   const [score, setScore] = useState(0);
@@ -173,18 +198,36 @@ const RhythmGame: React.FC = () => {
   // a chord must be released before the next hit (repeated chords are struck again)
   const armed = useRef(true);
 
-  // settings changed: new round, waiting to start
+  // the saved speed is read when the song changes (saving it must not reset the sections)
+  const savedSpeedRef = useRef(savedSpeed);
+  savedSpeedRef.current = savedSpeed;
+
+  // settings changed: new round (the whole song), waiting to start
   useEffect(() => {
     const next = newRound();
     setRound(next);
-    setHits(makeHits(next));
+    setRange({ first: 0, last: next.sections.length - 1 });
+    const nextSpeed = practicingRef.current ? savedSpeedRef.current : 100;
+    setHits(makeHits(next, 0, next.sections.length - 1, nextSpeed));
+    setSpeed(nextSpeed);
+    setLoop(0);
     setPhase('ready');
   }, [newRound, makeHits]);
 
-  /** Plays a song from the start */
-  const start = (next: Round = round) => {
+  /** Plays a song (the same sections at the same speed, or a new song from the start) */
+  const start = (
+    next: Round = round,
+    options: { first?: number; last?: number; speed?: number; loop?: number } = {}
+  ) => {
+    const isNew = next !== round;
+    const first = options.first ?? (isNew ? 0 : range.first);
+    const last = options.last ?? (isNew ? next.sections.length - 1 : range.last);
+    const playSpeed = options.speed ?? speed;
     setRound(next);
-    setHits(makeHits(next));
+    setRange({ first, last });
+    setSpeed(playSpeed);
+    setLoop(options.loop ?? 0);
+    setHits(makeHits(next, first, last, playSpeed));
     setCombo(0);
     setBestCombo(0);
     setScore(0);
@@ -310,6 +353,19 @@ const RhythmGame: React.FC = () => {
     }),
     [hits]
   );
+  // practice loop: the sections start again after a short break (5% faster after a loop
+  // with no miss, up to the real speed)
+  useEffect(() => {
+    if (phase !== 'done' || !practiceLoop) return undefined;
+    const clean = stats.miss === 0;
+    const timeout = setTimeout(() => {
+      const nextSpeed = practiceRamp && clean ? Math.min(100, speed + 5) : speed;
+      start(round, { speed: Math.max(speed, nextSpeed), loop: loop + 1 });
+    }, 1500);
+    return () => clearTimeout(timeout);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase, practiceLoop]);
+
   const accuracy = hits.length
     ? Math.round(((stats.perfect + stats.good * 0.5) / hits.length) * 100)
     : 0;
@@ -321,6 +377,70 @@ const RhythmGame: React.FC = () => {
   });
 
   // pick a song to play, or play random songs
+  const isWholeSong = range.first === 0 && range.last === round.sections.length - 1;
+  const sectionLabel = isWholeSong
+    ? 'Whole song'
+    : [
+        round.sections[range.first]?.name,
+        range.last !== range.first && round.sections[range.last]?.name,
+      ]
+        .filter(Boolean)
+        .join(' to ');
+
+  // practice: choose the sections and the speed (like a guitar game practice mode)
+  const changePractice = (first: number, last: number, nextSpeed: number) => {
+    const from = Math.min(first, last);
+    const to = Math.max(first, last);
+    setRange({ first: from, last: to });
+    setSpeed(nextSpeed);
+    setHits(makeHits(round, from, to, nextSpeed));
+  };
+  // practice: each section with its length in bars
+  const sectionBars = useMemo(
+    () =>
+      round.sections.map((section, index) => {
+        const end = round.sections[index + 1]?.start ?? round.chords.length;
+        const beats = round.chords
+          .slice(section.start, end)
+          .reduce((sum, chord) => sum + (chord.beats ?? round.beatsPerBar), 0);
+        return { name: section.name, bars: Math.max(1, Math.round(beats / round.beatsPerBar)) };
+      }),
+    [round]
+  );
+
+  // switching to the whole song keeps the practice choice for coming back
+  const savedPractice = useRef<{ round: Round; first: number; last: number } | null>(null);
+  const changePracticing = (next: boolean) => {
+    setPracticing(next);
+    if (next) {
+      const kept = savedPractice.current?.round === round ? savedPractice.current : null;
+      changePractice(kept?.first ?? 0, kept?.last ?? round.sections.length - 1, savedSpeed);
+    } else {
+      savedPractice.current = { round, first: range.first, last: range.last };
+      changePractice(0, round.sections.length - 1, 100);
+    }
+  };
+
+  const practice = (
+    <PracticePanel
+      practicing={practicing}
+      onPracticingChange={changePracticing}
+      sections={sectionBars}
+      first={range.first}
+      last={range.last}
+      onRangeChange={(first, last) => changePractice(first, last, speed)}
+      speed={speed}
+      onSpeedChange={(value) => {
+        changePractice(range.first, range.last, value);
+        updateSetting('rhythmGame.practiceSpeed', value);
+      }}
+      loop={!!gameSettings.practiceLoop}
+      onLoopChange={(value) => updateSetting('rhythmGame.practiceLoop', value)}
+      ramp={practiceRamp}
+      onRampChange={(value) => updateSetting('rhythmGame.practiceRamp', value)}
+    />
+  );
+
   const songPicker = (
     <Select
       className={cx('songPicker')}
@@ -344,7 +464,8 @@ const RhythmGame: React.FC = () => {
           {phase === 'done' || gameSettings.showTitle !== 'end' ? round.song.title : 'Mystery song'}
         </span>
         <span>
-          Key of <strong>{round.keyLabel}</strong> · {Math.round(round.tempo * rate)} BPM
+          Key of <strong>{round.keyLabel}</strong> ·{' '}
+          {Math.round(((round.tempo * speed) / 100) * rate)} BPM
           {beatsPerBar !== BEATS_PER_BAR && ` · ${beatsPerBar}/4`}
           {round.noSongTempo && (
             <span className={cx('slowed')}>
@@ -356,6 +477,12 @@ const RhythmGame: React.FC = () => {
           {rate > 1 && <span className={cx('faster')}> (sped up)</span>}
         </span>
       </div>
+
+      {practicing && (
+        <div className={cx('practiceInfo')}>
+          Practice: {sectionLabel} · {speed}%{practiceLoop && ` · loop ${loop + 1}`}
+        </div>
+      )}
 
       {phase === 'playing' && (
         <Button
@@ -449,6 +576,7 @@ const RhythmGame: React.FC = () => {
               : `Get ready to play ${round.song.title}.`}{' '}
             Release the keys between chords, even when a chord is repeated.
           </div>
+          {practice}
           <div className={cx('buttons')}>
             {songPicker}
             <Button intent="primary" onClick={() => start()}>
@@ -462,7 +590,17 @@ const RhythmGame: React.FC = () => {
       {phase === 'done' && (
         <div className={cx('panel', 'panel--done')}>
           <div className={cx('panelTitle')}>
-            You just played the chords of <strong>{round.song.title}</strong>!
+            {practiceLoop ? (
+              <>
+                Loop {loop + 1} done: <strong>{accuracy}%</strong>, again in a moment
+                {practiceRamp && stats.miss === 0 && speed < 100 && ' (5% faster)'}
+              </>
+            ) : (
+              <>
+                You just played the chords of <strong>{round.song.title}</strong>
+                {isWholeSong ? '!' : ` (${sectionLabel})`}
+              </>
+            )}
           </div>
           <div className={cx('stats')}>
             <span className={cx('stat--perfect')}>Perfect {stats.perfect}</span>
@@ -471,13 +609,23 @@ const RhythmGame: React.FC = () => {
             <span>Best combo {bestCombo}</span>
             <span>Accuracy {accuracy}%</span>
           </div>
+          {!practiceLoop && practice}
           <div className={cx('buttons')}>
-            {songPicker}
+            {practiceLoop && (
+              <Button
+                intent="neutral"
+                onClick={() => updateSetting('rhythmGame.practiceLoop', false)}
+              >
+                <Icon name="cross" />
+                Stop looping
+              </Button>
+            )}
+            {!practiceLoop && songPicker}
             <Button intent="neutral" onClick={() => start()}>
               <Icon name="reset" />
               Play again
             </Button>
-            {!chosenSong && (
+            {!chosenSong && !practiceLoop && (
               <Button intent="primary" onClick={() => start(newRound(round.song.id))}>
                 <Icon name="music" />
                 Next song

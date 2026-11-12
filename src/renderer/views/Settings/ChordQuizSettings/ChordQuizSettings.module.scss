@@ -123,3 +123,29 @@
     font: inherit;
   }
 }
+
+/** A group of settings in a card (rhythm game practice) **/
+
+.group {
+  margin: 1em 0;
+  padding: 0.8em 1em 0.2em;
+  border-radius: 0.6em;
+  border: 1px solid rgba($color-primary-light, 0.35);
+  background: rgba($color-primary-dark, 0.25);
+}
+
+.groupTitle {
+  display: flex;
+  align-items: center;
+  gap: 0.4em;
+  font-weight: bold;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: $color-primary-light;
+}
+
+.groupHint {
+  margin: 0.3em 0 0.6em;
+  font-size: 0.85em;
+  opacity: 0.75;
+}
