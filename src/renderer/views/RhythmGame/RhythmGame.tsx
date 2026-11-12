@@ -315,7 +315,8 @@ const RhythmGame: React.FC = () => {
               synth.play(
                 [event.midi],
                 event.duration / rateRef.current / 1000,
-                event.velocity,
+                // listening: the parts are softer, so the chords stand out
+                listeningRef.current ? Math.round(event.velocity * 0.6) : event.velocity,
                 (event.time - t) / rateRef.current / 1000,
                 PART_INSTRUMENTS[event.role]
               );
@@ -328,9 +329,11 @@ const RhythmGame: React.FC = () => {
             sounded.current.add(h.id);
             // a chord reached long ago (the song was paused) is not played late,
             // the rhythm guitar of the song plays the chords itself
-            if (t - h.time > 150 || playsRhythmPartRef.current) return;
+            // (listening: the chords are always heard, on top of the song's parts)
+            if (t - h.time > 150 || (playsRhythmPartRef.current && !listeningRef.current)) return;
             const seconds = ((h.length * beatMs) / rateRef.current / 1000) * 0.85;
-            synth.play(getGuideNotes(h), seconds, h.chordStart ? 95 : 70);
+            const velocity = listeningRef.current ? 115 : 95;
+            synth.play(getGuideNotes(h), seconds, h.chordStart ? velocity : 70);
           });
           // listening: the chords are played by the song itself
           if (listeningRef.current && due.length) {
