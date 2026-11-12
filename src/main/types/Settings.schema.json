@@ -387,6 +387,14 @@
                 "launchAtStartup": {
                     "type": "boolean"
                 },
+                "playNotes": {
+                    "description": "built-in sound: the notes played on the MIDI keyboard are heard",
+                    "type": "boolean"
+                },
+                "soundVolume": {
+                    "description": "built-in sound: volume from 0 to 100",
+                    "type": "number"
+                },
                 "startMinimized": {
                     "type": "boolean"
                 }
@@ -563,6 +571,16 @@
                 "songTempo": {
                     "description": "songs with a tempo of their own (imported) are played at it",
                     "type": "boolean"
+                },
+                "sound": {
+                    "description": "built-in sound: the chords of the song, a click on the beat, both, or nothing",
+                    "enum": [
+                        "both",
+                        "chords",
+                        "click",
+                        "off"
+                    ],
+                    "type": "string"
                 },
                 "speedUp": {
                     "description": "the song speeds up (5% every 4 hits in a row, up to 1.5 times)",

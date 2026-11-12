@@ -4,7 +4,19 @@ import classnames from 'classnames/bind';
 import { useSettings } from 'renderer/contexts/Settings';
 import { useServerState } from 'renderer/contexts/ServerState';
 
-import { Box, Container, FormControlLabel, Switch, Input, FormFieldset } from '@la-jarre-a-son/ui';
+import {
+  Box,
+  Button,
+  Container,
+  FormControlLabel,
+  Switch,
+  Input,
+  FormFieldset,
+  Slider,
+} from '@la-jarre-a-son/ui';
+
+import { Icon } from 'renderer/components';
+import { synth } from 'renderer/helpers/synth';
 
 import styles from './GeneralSettings.module.scss';
 
@@ -58,6 +70,41 @@ const GeneralSettings: React.FC = () => {
               checked={settings.general.startMinimized}
               onChange={(value) => updateSetting('general.startMinimized', value)}
             />
+          </FormControlLabel>
+        </FormFieldset>
+        <FormFieldset label="Sound">
+          <FormControlLabel
+            label="Play My Notes"
+            hint="Hear the notes played on your MIDI keyboard with the built-in sound (if it makes no sound of its own)"
+            reverse
+          >
+            <Switch
+              checked={!!settings.general.playNotes}
+              onChange={(value) => updateSetting('general.playNotes', value)}
+            />
+          </FormControlLabel>
+
+          <FormControlLabel label="Volume" hint="Volume of the built-in sound" reverse>
+            <div className={cx('volume')}>
+              <Slider
+                value={settings.general.soundVolume ?? 70}
+                onChange={(value: number) => updateSetting('general.soundVolume', value)}
+                min={0}
+                max={100}
+                step={5}
+                valueText={`${settings.general.soundVolume ?? 70}%`}
+              />
+              <Button
+                icon
+                size="sm"
+                variant="ghost"
+                aria-label="Test the sound"
+                title="Test the sound"
+                onClick={() => synth.play([60, 64, 67, 72], 1.2)}
+              >
+                <Icon name="music" />
+              </Button>
+            </div>
           </FormControlLabel>
         </FormFieldset>
         <FormFieldset label="Overlay server">

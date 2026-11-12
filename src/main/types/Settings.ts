@@ -129,6 +129,8 @@ export type RhythmGameSettings = {
   practiceLoop: boolean;
   /** practice: 5% faster after each loop with no miss, up to the real speed */
   practiceRamp: boolean;
+  /** built-in sound: the chords of the song, a click on the beat, both, or nothing */
+  sound: 'off' | 'chords' | 'click' | 'both';
 };
 
 export type ScaleSet =
@@ -220,6 +222,10 @@ export type ServerSettings = {
 export type GeneralSettings = {
   launchAtStartup: boolean;
   startMinimized: boolean;
+  /** built-in sound: the notes played on the MIDI keyboard are heard */
+  playNotes: boolean;
+  /** built-in sound: volume from 0 to 100 */
+  soundVolume: number;
 };
 
 export type Settings = {

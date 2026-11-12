@@ -113,6 +113,7 @@ export const defaultRhythmGameSettings: RhythmGameSettings = {
   practiceSpeed: 100,
   practiceLoop: false,
   practiceRamp: false,
+  sound: 'chords' as const,
 };
 
 export const defaultScaleDegreesSettings: ScaleDegreesSettings = {
@@ -179,6 +180,8 @@ export const defaults: StoreType = {
     general: {
       launchAtStartup: false,
       startMinimized: false,
+      playNotes: false,
+      soundVolume: 70,
     },
     chordDisplay: [defaultChordDisplaySettings],
     chordQuiz: defaultChordQuizSettings,
