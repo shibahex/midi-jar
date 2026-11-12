@@ -161,6 +161,10 @@ export type RhythmGameSettings = {
     melody: number;
     click: number;
   };
+  /** built-in sound: the instrument of each part ("" or missing: the sound style's) */
+  instruments: Partial<Record<'chords' | 'rhythm' | 'bass' | 'lead' | 'melody', string>>;
+  /** how late the playing reaches the game (ms): MIDI, audio, bluetooth... it is judged earlier */
+  latencyMs: number;
   /** Spotify: the Client ID of the user's Spotify app (to log in) */
   spotifyClientId: string;
   /** Spotify: songs linked to Spotify play there, in time with the game */
@@ -262,6 +266,8 @@ export type GeneralSettings = {
   soundVolume: number;
   /** built-in sound: classical (piano, strings, flute) or electric */
   soundStyle: 'classical' | 'electric';
+  /** built-in sound: the instrument heard when playing the keyboard ("" : the style's) */
+  keyboardInstrument: string;
 };
 
 export type Settings = {

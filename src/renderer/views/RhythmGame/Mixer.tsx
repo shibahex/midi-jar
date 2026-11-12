@@ -5,7 +5,15 @@ import styles from './Mixer.module.scss';
 
 const cx = classnames.bind(styles);
 
-export type MixerChannel = { id: string; label: string; value: number; muted?: boolean };
+export type MixerChannel = {
+  id: string;
+  label: string;
+  value: number;
+  muted?: boolean;
+  /** the instrument playing it, and the ones to pick from ("" : the default one) */
+  instrument?: string;
+  instruments?: { value: string; label: string }[];
+};
 
 type Props = {
   channels: MixerChannel[];
@@ -13,13 +21,16 @@ type Props = {
   onInput: (id: string, value: number) => void;
   /** when let go (to save it) */
   onChange: (id: string, value: number) => void;
+  /** an instrument is picked for a part */
+  onInstrument?: (id: string, instrument: string) => void;
 };
 
 const VolumeBar: React.FC<{
   channel: MixerChannel;
   onInput: Props['onInput'];
   onChange: Props['onChange'];
-}> = ({ channel, onInput, onChange }) => {
+  onInstrument: Props['onInstrument'];
+}> = ({ channel, onInput, onChange, onInstrument }) => {
   const track = useRef<HTMLDivElement>(null);
   const [value, setValue] = useState(channel.value);
   const dragging = useRef(false);
@@ -77,6 +88,21 @@ const VolumeBar: React.FC<{
         <div className={cx('fill')} style={{ height: `${value}%` }} />
       </div>
       <span className={cx('label')}>{channel.label}</span>
+      {channel.instruments && (
+        <select
+          className={cx('instrument')}
+          value={channel.instrument ?? ''}
+          aria-label={`${channel.label} instrument`}
+          title="Instrument"
+          onChange={(e) => onInstrument?.(channel.id, e.target.value)}
+        >
+          {channel.instruments.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+      )}
     </div>
   );
 };
@@ -84,14 +110,24 @@ const VolumeBar: React.FC<{
 /**
  * Volume bars, one per part: drag a bar (or use the arrow keys) to set its volume
  */
-const Mixer: React.FC<Props> = ({ channels, onInput, onChange }) => {
+const Mixer: React.FC<Props> = ({ channels, onInput, onChange, onInstrument }) => {
   return (
     <div className={cx('base')} role="group" aria-label="Volumes">
       {channels.map((channel) => (
-        <VolumeBar key={channel.id} channel={channel} onInput={onInput} onChange={onChange} />
+        <VolumeBar
+          key={channel.id}
+          channel={channel}
+          onInput={onInput}
+          onChange={onChange}
+          onInstrument={onInstrument}
+        />
       ))}
     </div>
   );
+};
+
+Mixer.defaultProps = {
+  onInstrument: undefined,
 };
 
 export default Mixer;

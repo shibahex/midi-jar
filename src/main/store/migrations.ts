@@ -363,6 +363,7 @@ const migrations: Migrations<StoreType> = {
         playNotes: false,
         soundVolume: 70,
         soundStyle: 'classical',
+        keyboardInstrument: '',
         ...settings.general,
       },
       chordQuiz: {

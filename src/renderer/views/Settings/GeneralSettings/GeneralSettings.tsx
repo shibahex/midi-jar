@@ -17,7 +17,7 @@ import {
 } from '@la-jarre-a-son/ui';
 
 import { Icon } from 'renderer/components';
-import { synth } from 'renderer/helpers/synth';
+import { INSTRUMENTS, synth } from 'renderer/helpers/synth';
 
 import styles from './GeneralSettings.module.scss';
 
@@ -97,6 +97,18 @@ const GeneralSettings: React.FC = () => {
                 { value: 'classical', label: 'Classical' },
                 { value: 'electric', label: 'Electric' },
               ]}
+            />
+          </FormControlLabel>
+
+          <FormControlLabel
+            label="My Instrument"
+            hint="The instrument heard when you play your keyboard (Play My Notes)"
+            reverse
+          >
+            <Select
+              value={settings.general.keyboardInstrument ?? ''}
+              onChange={(value) => updateSetting('general.keyboardInstrument', value)}
+              options={[{ value: '', label: 'From the sound style' }, ...INSTRUMENTS]}
             />
           </FormControlLabel>
 

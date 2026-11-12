@@ -384,6 +384,10 @@
         },
         "general": {
             "properties": {
+                "keyboardInstrument": {
+                    "description": "built-in sound: the instrument heard when playing the keyboard (\"\" : the style's)",
+                    "type": "string"
+                },
                 "launchAtStartup": {
                     "type": "boolean"
                 },
@@ -580,6 +584,31 @@
                 },
                 "gamification": {
                     "type": "boolean"
+                },
+                "instruments": {
+                    "description": "built-in sound: the instrument of each part (\"\" or missing: the sound style's)",
+                    "properties": {
+                        "bass": {
+                            "type": "string"
+                        },
+                        "chords": {
+                            "type": "string"
+                        },
+                        "lead": {
+                            "type": "string"
+                        },
+                        "melody": {
+                            "type": "string"
+                        },
+                        "rhythm": {
+                            "type": "string"
+                        }
+                    },
+                    "type": "object"
+                },
+                "latencyMs": {
+                    "description": "how late the playing reaches the game (ms): MIDI, audio, bluetooth... it is judged earlier",
+                    "type": "number"
                 },
                 "learningMode": {
                     "type": "boolean"

@@ -300,6 +300,10 @@ ipcMain.handle(
 );
 ipcMain.handle('spotify:redirectUri', () => spotify.SPOTIFY_REDIRECT_URI);
 ipcMain.handle(
+  'spotify:volume',
+  spotifyCall((percent: number) => spotify.setVolume(percent))
+);
+ipcMain.handle(
   'spotify:bars',
   spotifyCall((uri: string) => spotify.getBars(uri))
 );
