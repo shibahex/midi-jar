@@ -301,6 +301,16 @@ const RhythmGame: React.FC = () => {
     return () => cancelAnimationFrame(frame);
   }, [phase, beatMs, beatsPerBar, record, onMiss, sound]);
 
+  // Esc stops the song
+  useEffect(() => {
+    if (phase !== 'playing') return undefined;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setPhase('ready');
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [phase]);
+
   // a chord is played: the closest chord to play in time is judged
   useEffect(() => {
     if (!playedMidiNotes.length) {
@@ -410,13 +420,13 @@ const RhythmGame: React.FC = () => {
       {phase === 'playing' && (
         <Button
           className={cx('stop')}
-          size="sm"
-          intent="neutral"
-          variant="ghost"
+          intent="danger"
           onClick={() => setPhase('ready')}
+          title="Stop the song (Esc)"
         >
           <Icon name="cross" />
           Stop
+          <kbd className={cx('stopKey')}>Esc</kbd>
         </Button>
       )}
 
