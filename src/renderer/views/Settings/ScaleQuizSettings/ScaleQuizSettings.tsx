@@ -46,7 +46,7 @@ const ScaleQuizSettings: React.FC = () => {
           </FormField>
 
           {melodies ? (
-            <FormField label="Melodies" hint="Choose which songs can be asked">
+            <FormField as="div" label="Melodies" hint="Choose which songs can be asked">
               <ToggleList
                 items={MELODIES.map((m) => ({ id: m.id, label: m.title }))}
                 included={getIncludedMelodies(excludedMelodies).map((m) => m.id)}
