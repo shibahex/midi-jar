@@ -44,8 +44,11 @@ export type ChordDisplaySettings = {
 export type Fingering = 'right' | 'left' | 'both' | 'none';
 
 /** A song imported from a ChordPro file or a chord sheet */
-/** Parts of a song played by the built-in sound (Songsterr songs) */
-export type SongPartRole = 'rhythm' | 'bass' | 'lead' | 'melody';
+/**
+ * Parts of a song played by the built-in sound (Songsterr songs); other: any other instrument
+ * of the song (piano, strings, a second guitar...)
+ */
+export type SongPartRole = 'rhythm' | 'bass' | 'lead' | 'melody' | 'other';
 
 /** The notes of a part: flat [start, length, midi, velocity, ...] in beats from the song start */
 export type SongPart = { role: SongPartRole; name: string; notes: number[] };
@@ -73,14 +76,29 @@ export type ImportedSong = {
   leadIn?: number;
   /** notes of the instruments (rhythm guitar, bass, lead, melody), to hear the real song */
   parts?: SongPart[];
+  /** the chords were guessed from the notes (a Songsterr tab without chord names) */
+  chordsGuessed?: boolean;
   /** the song on Spotify, and where its first chord is in the recording (ms, once synced) */
   spotify?: {
     uri: string;
     name: string;
     durationMs?: number;
+    /** the cover of its album */
+    imageUrl?: string;
     firstChordMs?: number;
-    /** how the first chord was found: estimated, tapped, or corrected from the playing */
-    syncedBy?: 'estimate' | 'tap' | 'playing' | 'listening';
+    /** the tempo of the recording, found by listening (often a little off the song's) */
+    bpm?: number;
+    /**
+     * how the first chord was found: estimated, tapped, corrected from the playing, or by
+     * listening to the whole song or to parts of it
+     */
+    syncedBy?: 'estimate' | 'tap' | 'playing' | 'listening' | 'parts';
+    /**
+     * where each beat of the song is in the recording (ms, beat 0 at the start of its intro),
+     * found by listening to it (the whole song: its tempo all along; parts of it: the tempo
+     * between them)
+     */
+    beatTimes?: number[];
   };
 };
 
@@ -150,9 +168,12 @@ export type RhythmGameSettings = {
   practiceRamp: boolean;
   /** built-in sound: the chords of the song, a click on the beat, both, or nothing */
   sound: 'off' | 'chords' | 'click' | 'both';
-  /** built-in sound: the parts of Songsterr songs heard (the rhythm guitar replaces the chords) */
-  songParts: SongPartRole[];
-  /** built-in sound: volume of each part, from 0 to 100 */
+  /**
+   * built-in sound: the parts of Songsterr songs heard (the rhythm guitar replaces the chords):
+   * the roles of the main parts, or other parts by name ("other:Piano")
+   */
+  songParts: string[];
+  /** built-in sound: volume of each part, from 0 to 100 (other instruments by name too) */
   volumes: {
     chords: number;
     rhythm: number;
@@ -160,21 +181,33 @@ export type RhythmGameSettings = {
     lead: number;
     melody: number;
     click: number;
+    [part: string]: number;
   };
   /** built-in sound: the instrument of each part ("" or missing: the sound style's) */
-  instruments: Partial<Record<'chords' | 'rhythm' | 'bass' | 'lead' | 'melody', string>>;
+  instruments: Record<string, string>;
   /** how late the playing reaches the game (ms): MIDI, audio, bluetooth... it is judged earlier */
   latencyMs: number;
   /** Spotify: the Client ID of the user's Spotify app (to log in) */
   spotifyClientId: string;
   /** Spotify: songs linked to Spotify play there, in time with the game */
   spotifySync: boolean;
-  /** Spotify: the song is listened to (a sound input) to sync it */
+  /** Spotify: songs can be synced by listening to the whole recording (a sound input) */
   listenSync: boolean;
+  /**
+   * Spotify: playing along with a song not synced by listening yet, it is synced quickly first
+   * (parts of it heard), then joined
+   */
+  syncBeforeJoin?: boolean;
+  /** a song typed by its name plays on YouTube, on Spotify, or not at all (the game alone) */
+  playOn?: 'youtube' | 'spotify' | 'none';
+  /** Spotify: the game plays along with what Spotify plays (when it is an imported song) */
+  followSpotify: boolean;
+  /** songs whose chords were guessed from the notes can be played as chords (else a part) */
+  guessedChords: boolean;
   /** the sound input listened to ("": the sound of the computer when it can, or the default) */
   syncInput: string;
   /** what the player plays: the chords, or the notes of a part of the song */
-  playPart: 'chords' | SongPartRole;
+  playPart: string;
 };
 
 export type ScaleSet =

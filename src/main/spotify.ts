@@ -153,6 +153,9 @@ export function login(clientId: string): Promise<void> {
 
 export const logout = () => setAuth(undefined);
 
+/** Logged in to Spotify (it may still need to log in again) */
+export const isConnected = () => !!getAuth();
+
 /** A valid access token (refreshed when it expired), or an error */
 async function getToken() {
   const auth = getAuth();
@@ -167,12 +170,42 @@ async function getToken() {
   ).accessToken;
 }
 
+/** Spotify asked to wait until then (ms since 1970): no call is made before */
+let waitUntil = 0;
+
+/**
+ * How long to wait, said simply ("45 s", "about 13 h 15 min, until 3:50 PM"); it ends with
+ * the seconds ("(47724 s)") for the game to know when to try again
+ */
+function waitText(ms: number) {
+  const seconds = Math.ceil(ms / 1000);
+  if (seconds < 120) return `${seconds} s`;
+  const minutes = Math.round(seconds / 60);
+  const hours = Math.floor(minutes / 60);
+  const length = hours ? `${hours} h ${minutes % 60} min` : `${minutes} min`;
+  const until = new Date(Date.now() + ms).toLocaleTimeString([], {
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+  return `about ${length}, until ${until} (${seconds} s)`;
+}
+
 /** A call to the Web API: JSON or null (no content) */
 async function api(path: string, init: RequestInit = {}) {
+  const waitMs = waitUntil - Date.now();
+  if (waitMs > 0) {
+    throw new Error(`Spotify asked to wait (too many requests): ${waitText(waitMs)}`);
+  }
   const response = await fetch(`${API}${path}`, {
     ...init,
     headers: { Authorization: `Bearer ${await getToken()}`, 'Content-Type': 'application/json' },
   });
+  // too many calls: none until Spotify says (a minute when it does not)
+  if (response.status === 429) {
+    const seconds = Number(response.headers.get('Retry-After')) || 60;
+    waitUntil = Date.now() + seconds * 1000;
+    throw new Error(`Spotify asked to wait (too many requests): ${waitText(seconds * 1000)}`);
+  }
   if (response.status === 204) return null;
   const text = await response.text();
   const data = text ? JSON.parse(text) : null;
@@ -196,6 +229,10 @@ type ApiTrack = {
   name: string;
   duration_ms: number;
   artists?: { name: string }[];
+  /** the track asked for, when Spotify plays another release of it (relinking) */
+  linked_from?: { uri: string };
+  popularity?: number;
+  album?: { name: string; album_type?: string; images?: { url: string; width?: number }[] };
 };
 
 const toTrack = (track: ApiTrack): SpotifyTrack => ({
@@ -203,6 +240,9 @@ const toTrack = (track: ApiTrack): SpotifyTrack => ({
   name: track.name,
   artists: (track.artists ?? []).map((a) => a.name).join(', '),
   durationMs: track.duration_ms,
+  linkedFromUri: track.linked_from?.uri,
+  // the cover, about 300 px wide (the largest one comes first)
+  imageUrl: track.album?.images?.[1]?.url ?? track.album?.images?.[0]?.url,
 });
 
 /** Who is connected, or null */
@@ -217,9 +257,10 @@ export async function getStatus() {
 }
 
 /** What Spotify plays now, and where */
-export async function getPlayer(): Promise<SpotifyPlayer | null> {
+async function askPlayer(): Promise<SpotifyPlayer | null> {
   const asked = Date.now();
-  const data = await api('/me/player');
+  // with a market, Spotify tells which track it relinked from
+  const data = await api('/me/player?market=from_token');
   if (!data?.item) return null;
   return {
     isPlaying: !!data.is_playing,
@@ -231,12 +272,43 @@ export async function getPlayer(): Promise<SpotifyPlayer | null> {
   };
 }
 
-/** Plays a track from a position (ms) */
-export const play = (uri: string, positionMs: number) =>
-  api('/me/player/play', {
-    method: 'PUT',
-    body: JSON.stringify({ uris: [uri], position_ms: Math.max(0, Math.round(positionMs)) }),
+/** The last answer about what Spotify plays (asked again only after a moment) */
+let lastPlayer: { at: number; player: Promise<SpotifyPlayer | null> } | null = null;
+const PLAYER_FRESH_MS = 1000;
+
+/** What Spotify plays now (the game asks from several places: asked once a moment) */
+export function getPlayer(): Promise<SpotifyPlayer | null> {
+  if (lastPlayer && Date.now() - lastPlayer.at < PLAYER_FRESH_MS) return lastPlayer.player;
+  const player = askPlayer();
+  lastPlayer = { at: Date.now(), player };
+  // (a failure is not kept)
+  player.catch(() => {
+    lastPlayer = null;
   });
+  return player;
+}
+
+/**
+ * Plays a track from a position (ms). Spotify open but idle for a while is no longer "active":
+ * then it is asked to play on one of the user's devices (this computer's first)
+ */
+export async function play(uri: string, positionMs: number) {
+  const body = JSON.stringify({ uris: [uri], position_ms: Math.max(0, Math.round(positionMs)) });
+  try {
+    return await api('/me/player/play', { method: 'PUT', body });
+  } catch (e) {
+    if (!/No Spotify device is active/.test((e as Error).message)) throw e;
+    const devices: { id: string; type: string; is_restricted: boolean }[] =
+      (await api('/me/player/devices'))?.devices ?? [];
+    const usable = devices.filter((d) => d.id && !d.is_restricted);
+    const device = usable.find((d) => d.type === 'Computer') ?? usable[0];
+    if (!device) throw e;
+    return api(`/me/player/play?device_id=${encodeURIComponent(device.id)}`, {
+      method: 'PUT',
+      body,
+    });
+  }
+}
 
 export const pause = () => api('/me/player/pause', { method: 'PUT' });
 
@@ -264,8 +336,32 @@ export async function getBars(uri: string): Promise<number[] | null> {
 }
 
 /** The first track found for a song name, or null */
+/** Words of versions other than the studio one (unless the song asked for is one of them) */
+const OTHER_VERSIONS =
+  /\b(live|acoustic|remix|demo|instrumental|karaoke|cover|session|unplugged|sped up|slowed|reverb)\b/i;
+
+/**
+ * The studio version of a song: its name first, then not a live (or remixed...) version,
+ * then not from a compilation, then the most listened to
+ */
 export async function search(query: string): Promise<SpotifyTrack | null> {
-  const data = await api(`/search?type=track&limit=1&q=${encodeURIComponent(query)}`);
-  const track = data?.tracks?.items?.[0];
-  return track ? toTrack(track) : null;
+  const data = await api(`/search?type=track&limit=10&q=${encodeURIComponent(query)}`);
+  const tracks: ApiTrack[] = data?.tracks?.items ?? [];
+  if (!tracks.length) return null;
+  const words = query.toLowerCase();
+  const wantsOther = OTHER_VERSIONS.test(query);
+  const score = (track: ApiTrack) => {
+    const name = track.name.toLowerCase().replace(/\s*[-(].*$/, '');
+    const other =
+      !wantsOther &&
+      (OTHER_VERSIONS.test(track.name) || OTHER_VERSIONS.test(track.album?.name ?? ''));
+    return (
+      (name && words.includes(name) ? 1000 : 0) -
+      (other ? 500 : 0) -
+      (track.album?.album_type === 'compilation' ? 100 : 0) +
+      (track.popularity ?? 0)
+    );
+  };
+  const best = tracks.reduce((a, b) => (score(b) > score(a) ? b : a));
+  return toTrack(best);
 }

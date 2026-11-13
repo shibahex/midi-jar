@@ -12,6 +12,10 @@ export type SpotifyTrack = {
   name: string;
   artists: string;
   durationMs: number;
+  /** the track asked for, when Spotify plays another release of the same song */
+  linkedFromUri?: string;
+  /** the cover of its album */
+  imageUrl?: string;
 };
 
 /** What Spotify plays, and where it was in the track when asked */

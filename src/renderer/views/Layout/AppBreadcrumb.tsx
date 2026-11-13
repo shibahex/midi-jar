@@ -48,6 +48,7 @@ const AppBreadcrumb: React.FC = () => {
           {hasSettings && (
             <BreadcrumbItem as={NavLink} to={`${path}/settings`} aria-label="Settings">
               <Icon name="settings" />
+              <span className={cx('label')}>Settings</span>
             </BreadcrumbItem>
           )}
         </Fragment>

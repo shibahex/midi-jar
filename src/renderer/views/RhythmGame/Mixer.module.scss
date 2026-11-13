@@ -4,6 +4,7 @@
   display: flex;
   justify-content: center;
   align-items: flex-start;
+  flex-wrap: wrap;
   gap: 0.9em;
   padding: 0.6em 0.8em;
   border-radius: 0.6em;
@@ -18,8 +19,42 @@
   gap: 0.25em;
   width: 5.6em;
 
-  &--muted {
+  &--apart {
+    margin-right: 0.4em;
+    padding-right: 0.6em;
+    border-right: 1px solid rgba($color-white, 0.15);
+  }
+
+  // muted: dimmed, its mute button still bright
+  &--muted > :not(.mute) {
     opacity: 0.4;
+  }
+}
+
+.mute {
+  min-width: 1.9em;
+  padding: 0.05em 0.4em;
+  border: 1px solid rgba($color-white, 0.25);
+  border-radius: 4px;
+  background: transparent;
+  color: rgba($color-white, 0.7);
+  font: inherit;
+  font-size: 0.7em;
+  font-weight: bold;
+  cursor: pointer;
+
+  &:hover {
+    background: rgba($color-white, 0.1);
+  }
+
+  &--on {
+    border-color: $color-warning-normal;
+    background: $color-warning-normal;
+    color: $color-black;
+
+    &:hover {
+      background: $color-warning-light;
+    }
   }
 }
 

@@ -471,6 +471,10 @@
                                 },
                                 "type": "array"
                             },
+                            "chordsGuessed": {
+                                "description": "the chords were guessed from the notes (a Songsterr tab without chord names)",
+                                "type": "boolean"
+                            },
                             "id": {
                                 "type": "string"
                             },
@@ -497,11 +501,12 @@
                                             "type": "array"
                                         },
                                         "role": {
-                                            "description": "Parts of a song played by the built-in sound (Songsterr songs)",
+                                            "description": "Parts of a song played by the built-in sound (Songsterr songs); other: any other instrument\nof the song (piano, strings, a second guitar...)",
                                             "enum": [
                                                 "bass",
                                                 "lead",
                                                 "melody",
+                                                "other",
                                                 "rhythm"
                                             ],
                                             "type": "string"
@@ -529,20 +534,36 @@
                             "spotify": {
                                 "description": "the song on Spotify, and where its first chord is in the recording (ms, once synced)",
                                 "properties": {
+                                    "beatTimes": {
+                                        "description": "where each beat of the song is in the recording (ms, beat 0 at the start of its intro),\nfound by listening to it (the whole song: its tempo all along; parts of it: the tempo\nbetween them)",
+                                        "items": {
+                                            "type": "number"
+                                        },
+                                        "type": "array"
+                                    },
+                                    "bpm": {
+                                        "description": "the tempo of the recording, found by listening (often a little off the song's)",
+                                        "type": "number"
+                                    },
                                     "durationMs": {
                                         "type": "number"
                                     },
                                     "firstChordMs": {
                                         "type": "number"
                                     },
+                                    "imageUrl": {
+                                        "description": "the cover of its album",
+                                        "type": "string"
+                                    },
                                     "name": {
                                         "type": "string"
                                     },
                                     "syncedBy": {
-                                        "description": "how the first chord was found: estimated, tapped, or corrected from the playing",
+                                        "description": "how the first chord was found: estimated, tapped, corrected from the playing, or by\nlistening to the whole song or to parts of it",
                                         "enum": [
                                             "estimate",
                                             "listening",
+                                            "parts",
                                             "playing",
                                             "tap"
                                         ],
@@ -583,28 +604,19 @@
                     ],
                     "type": "string"
                 },
+                "followSpotify": {
+                    "description": "Spotify: the game plays along with what Spotify plays (when it is an imported song)",
+                    "type": "boolean"
+                },
                 "gamification": {
+                    "type": "boolean"
+                },
+                "guessedChords": {
+                    "description": "songs whose chords were guessed from the notes can be played as chords (else a part)",
                     "type": "boolean"
                 },
                 "instruments": {
                     "description": "built-in sound: the instrument of each part (\"\" or missing: the sound style's)",
-                    "properties": {
-                        "bass": {
-                            "type": "string"
-                        },
-                        "chords": {
-                            "type": "string"
-                        },
-                        "lead": {
-                            "type": "string"
-                        },
-                        "melody": {
-                            "type": "string"
-                        },
-                        "rhythm": {
-                            "type": "string"
-                        }
-                    },
                     "type": "object"
                 },
                 "latencyMs": {
@@ -615,8 +627,21 @@
                     "type": "boolean"
                 },
                 "listenSync": {
-                    "description": "Spotify: the song is listened to (a sound input) to sync it",
+                    "description": "Spotify: songs can be synced by listening to the whole recording (a sound input)",
                     "type": "boolean"
+                },
+                "syncBeforeJoin": {
+                    "description": "Spotify: playing along with a song not synced by listening yet, it is synced quickly first\n(parts of it heard), then joined",
+                    "type": "boolean"
+                },
+                "playOn": {
+                    "description": "a song typed by its name plays on YouTube, on Spotify, or not at all (the game alone)",
+                    "enum": [
+                        "none",
+                        "spotify",
+                        "youtube"
+                    ],
+                    "type": "string"
                 },
                 "onMiss": {
                     "description": "learning mode: on a miss, keep going, wait for the chord, or slow down",
@@ -639,13 +664,6 @@
                 },
                 "playPart": {
                     "description": "what the player plays: the chords, or the notes of a part of the song",
-                    "enum": [
-                        "bass",
-                        "chords",
-                        "lead",
-                        "melody",
-                        "rhythm"
-                    ],
                     "type": "string"
                 },
                 "practiceLoop": {
@@ -681,15 +699,8 @@
                     "type": "string"
                 },
                 "songParts": {
-                    "description": "built-in sound: the parts of Songsterr songs heard (the rhythm guitar replaces the chords)",
+                    "description": "built-in sound: the parts of Songsterr songs heard (the rhythm guitar replaces the chords):\nthe roles of the main parts, or other parts by name (\"other:Piano\")",
                     "items": {
-                        "description": "Parts of a song played by the built-in sound (Songsterr songs)",
-                        "enum": [
-                            "bass",
-                            "lead",
-                            "melody",
-                            "rhythm"
-                        ],
                         "type": "string"
                     },
                     "type": "array"
@@ -737,7 +748,10 @@
                     "type": "string"
                 },
                 "volumes": {
-                    "description": "built-in sound: volume of each part, from 0 to 100",
+                    "additionalProperties": {
+                        "type": "number"
+                    },
+                    "description": "built-in sound: volume of each part, from 0 to 100 (other instruments by name too)",
                     "properties": {
                         "bass": {
                             "type": "number"

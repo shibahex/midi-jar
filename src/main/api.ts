@@ -1,5 +1,7 @@
+import fs from 'fs';
 import os from 'os';
-import { app, ipcMain, BrowserWindow, systemPreferences } from 'electron';
+import path from 'path';
+import { app, ipcMain, BrowserWindow, shell, systemPreferences } from 'electron';
 
 import * as midi from './midi';
 import { startServer, stopServer, getState as getServerState } from './server';
@@ -24,8 +26,13 @@ import {
 } from './windowState';
 import { WindowState } from './types/WindowState';
 import { checkUpdates } from './update';
+import { getAssetPath } from './util';
 import * as spotify from './spotify';
+import * as youtube from './youtube';
+import * as playback from './playback';
 import { startCapture, stopCapture } from './soundCapture';
+import { stopMediaSessions } from './mediaSessions';
+import { isConnected as isExtensionConnected, stopBrowserTabs } from './browserTabs';
 
 function sendToAll(channel: string, ...args: unknown[]) {
   const windows = BrowserWindow.getAllWindows();
@@ -281,19 +288,19 @@ ipcMain.handle(
 );
 ipcMain.handle(
   'spotify:player',
-  spotifyCall(() => spotify.getPlayer())
+  spotifyCall(() => playback.getPlayer())
 );
 ipcMain.handle(
   'spotify:play',
-  spotifyCall((uri: string, ms: number) => spotify.play(uri, ms))
+  spotifyCall((uri: string, ms: number) => playback.play(uri, ms))
 );
 ipcMain.handle(
   'spotify:pause',
-  spotifyCall(() => spotify.pause())
+  spotifyCall(() => playback.pause())
 );
 ipcMain.handle(
   'spotify:seek',
-  spotifyCall((ms: number) => spotify.seek(ms))
+  spotifyCall((ms: number) => playback.seek(ms))
 );
 ipcMain.handle(
   'spotify:search',
@@ -301,16 +308,56 @@ ipcMain.handle(
 );
 ipcMain.handle('spotify:redirectUri', () => spotify.SPOTIFY_REDIRECT_URI);
 
+ipcMain.handle(
+  'spotify:players',
+  spotifyCall(() => playback.listPlayers())
+);
+ipcMain.handle(
+  'spotify:select',
+  spotifyCall((uri: string) => playback.select(uri))
+);
+
+/* YOUTUBE (it plays through the same calls as Spotify: player, play, pause...) */
+
+ipcMain.handle(
+  'youtube:search',
+  spotifyCall((query: string) => youtube.search(query))
+);
+/**
+ * MIDI Jar's browser extension (every YouTube tab), copied where it stays (the app's own files
+ * may move: an AppImage is somewhere else each time), to add it to the browser from there
+ */
+const extensionPath = () => {
+  const target = path.join(app.getPath('userData'), 'browser-extension');
+  fs.cpSync(getAssetPath('browser-extension'), target, { recursive: true });
+  return target;
+};
+ipcMain.handle('youtube:extension', () => ({
+  path: extensionPath(),
+  connected: isExtensionConnected(),
+}));
+ipcMain.handle('youtube:openExtension', () =>
+  shell.openPath(extensionPath()).then(() => undefined)
+);
+ipcMain.handle(
+  'youtube:video',
+  spotifyCall((link: string) => youtube.getVideo(link))
+);
+
 /* SOUND OF THE COMPUTER (to sync by listening) */
 
-ipcMain.handle('app:sound:start', (event) => startCapture(event.sender));
+ipcMain.handle('app:sound:start', (event, uri?: string) => startCapture(event.sender, uri));
 ipcMain.handle('app:sound:stop', () => stopCapture());
-app.on('will-quit', () => stopCapture());
+app.on('will-quit', () => {
+  stopCapture();
+  stopMediaSessions();
+  stopBrowserTabs();
+});
 ipcMain.handle(
   'spotify:volume',
-  spotifyCall((percent: number) => spotify.setVolume(percent))
+  spotifyCall((percent: number) => playback.setVolume(percent))
 );
 ipcMain.handle(
   'spotify:bars',
-  spotifyCall((uri: string) => spotify.getBars(uri))
+  spotifyCall((uri: string) => playback.getBars(uri))
 );

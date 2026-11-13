@@ -377,7 +377,9 @@ export function getImportedSongChords(song: ImportedSong) {
   const romans = key.quality === 'Minor' ? MINOR_ROMAN : ROMAN;
   return song.chords.map((name, i) => {
     const chord = Chord.get(name) as TChord;
-    const root = chord.tonic ?? tonic;
+    // no chord played there ("N.C.")
+    if (!chord.tonic) return { numeral: '', name, chord, beats: song.beats?.[i] };
+    const root = chord.tonic;
     const semitones = ((Note.chroma(root) ?? 0) - (Note.chroma(tonic) ?? 0) + 12) % 12;
     const minor = chord.quality === 'Minor' || chord.quality === 'Diminished';
     const numeral = minor ? romans[semitones].toLowerCase() : romans[semitones];

@@ -1,0 +1,19 @@
+{
+  "manifest_version": 3,
+  "name": "MIDI Jar · YouTube",
+  "version": "1.0.0",
+  "description": "Lets MIDI Jar follow and control the YouTube videos playing in this browser, every tab, to play along with them.",
+  "icons": { "48": "icon48.png", "128": "icon128.png" },
+  "background": { "service_worker": "background.js", "scripts": ["background.js"] },
+  "content_scripts": [
+    {
+      "matches": ["https://www.youtube.com/*", "https://music.youtube.com/*", "https://m.youtube.com/*"],
+      "js": ["content.js"],
+      "run_at": "document_idle",
+      "all_frames": false
+    }
+  ],
+  "browser_specific_settings": {
+    "gecko": { "id": "youtube@midi-jar.ljas.fr", "strict_min_version": "121.0" }
+  }
+}

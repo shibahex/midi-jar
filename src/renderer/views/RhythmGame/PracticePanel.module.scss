@@ -301,3 +301,34 @@ $accent: $color-primary-light;
     opacity: 0.5;
   }
 }
+
+// the bars of the sections picked: one, or from one to another
+.barGrid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  max-height: 9em;
+  overflow-y: auto;
+}
+
+.bar {
+  min-width: 2.2em;
+  padding: 0.2em 0.3em;
+  border: 1px solid rgba($color-white, 0.15);
+  border-radius: 4px;
+  background: rgba($color-white, 0.05);
+  color: inherit;
+  font: inherit;
+  font-size: 0.8em;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+
+  &:hover {
+    background: rgba($color-white, 0.15);
+  }
+
+  &--in {
+    border-color: $color-primary-light;
+    background: rgba($color-primary-normal, 0.6);
+  }
+}

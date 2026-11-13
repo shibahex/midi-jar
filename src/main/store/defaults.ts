@@ -6,7 +6,6 @@ import {
   KeyboardSettings,
   NotationSettings,
   RhythmGameSettings,
-  SongPartRole,
   ScaleDegreesSettings,
   ScaleQuizSettings,
 } from 'main/types';
@@ -115,15 +114,19 @@ export const defaultRhythmGameSettings: RhythmGameSettings = {
   practiceLoop: false,
   practiceRamp: false,
   sound: 'chords' as const,
-  songParts: ['rhythm', 'bass', 'lead', 'melody'] as SongPartRole[],
+  songParts: ['rhythm', 'bass', 'lead', 'melody'],
   volumes: { chords: 80, rhythm: 70, bass: 75, lead: 65, melody: 80, click: 60 },
   instruments: {},
   latencyMs: 0,
   spotifyClientId: '',
   spotifySync: false,
   listenSync: true,
+  syncBeforeJoin: false,
+  playOn: 'youtube',
+  followSpotify: false,
+  guessedChords: true,
   syncInput: '',
-  playPart: 'chords' as const,
+  playPart: 'chords',
 };
 
 export const defaultScaleDegreesSettings: ScaleDegreesSettings = {

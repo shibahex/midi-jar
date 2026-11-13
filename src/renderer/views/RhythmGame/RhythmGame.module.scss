@@ -1,6 +1,10 @@
 @import 'tokens';
 
 $green: #2ecc40;
+$spotify: #1ed760;
+$youtube: #ff3b3b;
+$fs-small: clamp(12px, min(2vh, 1.6vw), 16px);
+$fs-body: clamp(13px, min(2.3vh, 1.9vw), 19px);
 
 @keyframes pop {
   0% {
@@ -31,7 +35,7 @@ $green: #2ecc40;
 @keyframes appear {
   0% {
     opacity: 0;
-    transform: translateY(10%);
+    transform: translateY(12px);
   }
   100% {
     opacity: 1;
@@ -39,55 +43,208 @@ $green: #2ecc40;
   }
 }
 
+@keyframes pulse {
+  0% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes flash {
+  0% {
+    opacity: 0.9;
+    transform: scaleX(1);
+  }
+  100% {
+    opacity: 0;
+    transform: scaleX(8);
+  }
+}
+
+@keyframes blink {
+  50% {
+    opacity: 0.3;
+  }
+}
+
 .base {
   position: relative;
+  isolation: isolate;
   display: flex;
   width: 100%;
   height: 100%;
   flex-direction: column;
-  // centered, but the top stays visible when the content is taller than the window
-  justify-content: safe center;
   align-items: center;
-  gap: min(2vh, 1.5vw);
-  padding: 0.5em 0;
+  gap: min(1.8vh, 1.4vw);
+  padding: 0.8em 1em 1.2em;
   overflow-x: hidden;
   overflow-y: auto;
   text-align: center;
   line-height: 1.25;
+  font-size: $fs-body;
+
+  // the start and end screens: room for the buttons in the corner
+  &:not(.base--playing) {
+    padding-top: 3.6em;
+  }
 }
 
-.header {
+/** The song's cover, blurred behind everything, and the beat **/
+
+.backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.backdropArt {
+  position: absolute;
+  inset: -10%;
+  background-size: cover;
+  background-position: center;
+  filter: blur(60px) saturate(1.5) brightness(0.45);
+  opacity: 0.7;
+  transition: opacity 0.6s;
+}
+
+.pulse {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at 50% 60%, rgba($color-white, 0.05), transparent 65%);
+  animation: pulse var(--beat-ms, 400ms) ease-out forwards;
+
+  &--bar {
+    background: radial-gradient(ellipse at 50% 60%, rgba($color-white, 0.11), transparent 70%);
+  }
+}
+
+/** Top bar: the song, the score, the actions **/
+
+.hud {
   display: flex;
-  flex-direction: column;
   align-items: center;
-  gap: 0.2em;
-  font-size: clamp(13px, min(2.6vh, 2vw), 24px);
-  opacity: 0.9;
+  gap: 1em;
+  width: min(100%, 1200px);
+}
+
+.hudSong {
+  display: flex;
+  align-items: center;
+  gap: 0.7em;
+  min-width: 0;
+  flex: 1;
+  text-align: left;
+}
+
+.hudText {
+  min-width: 0;
 }
 
 .song {
-  font-size: 1.4em;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 1.15em;
   font-weight: bold;
 }
 
-.scoreLine {
+.artist {
+  font-weight: normal;
+  opacity: 0.7;
+}
+
+.meta {
   display: flex;
-  gap: 1.2em;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25em 0.8em;
+  font-size: $fs-small;
+  opacity: 0.85;
+
+  strong {
+    color: $color-warning-light;
+  }
+}
+
+.tag {
+  padding: 0.05em 0.6em;
+  border-radius: 999px;
+  font-size: 0.9em;
+  background: rgba($color-white, 0.08);
+
+  &--practice {
+    color: $color-primary-light;
+    background: rgba($color-primary-normal, 0.25);
+  }
+
+  &--ok {
+    color: $green;
+    background: rgba($green, 0.15);
+  }
+
+  &--warn {
+    color: $color-warning-light;
+    background: rgba($color-warning-normal, 0.15);
+  }
+}
+
+.cover {
+  flex-shrink: 0;
+  border-radius: 0.4em;
+  object-fit: cover;
+  box-shadow: 0 4px 18px rgba($color-black, 0.5);
+
+  &--sm {
+    width: 2.8em;
+    height: 2.8em;
+  }
+
+  &--lg {
+    width: min(9em, 22vw);
+    height: min(9em, 22vw);
+    border-radius: 0.6em;
+  }
+
+  &--none {
+    display: grid;
+    place-items: center;
+    background: linear-gradient(135deg, $color-primary-dark, rgba($color-black, 0.6));
+    color: rgba($color-white, 0.6);
+    font-size: 1.2em;
+  }
+
+  &--lg.cover--none {
+    font-size: 2.5em;
+  }
+}
+
+.scoreBox {
+  display: flex;
   align-items: baseline;
-  font-size: clamp(14px, min(3vh, 2.4vw), 30px);
+  gap: 0.6em;
+  font-size: clamp(18px, min(3.6vh, 2.8vw), 34px);
 }
 
 .score {
+  min-width: 3em;
+  text-align: right;
   font-family: 'Rocher';
   font-variation-settings:
     'BVEL' 50,
     'SHDW' 50;
   font-palette: --Rocher--white;
+  font-variant-numeric: tabular-nums;
 }
 
 .combo {
-  opacity: 0.4;
+  min-width: 2.5em;
+  text-align: left;
   font-weight: bold;
+  opacity: 0.35;
 
   &--on {
     opacity: 1;
@@ -95,27 +252,341 @@ $green: #2ecc40;
   }
 }
 
-/** Chord to play now **/
+.hudActions {
+  display: flex;
+  align-items: center;
+  gap: 0.5em;
+}
+
+// while playing: start again, slower or faster
+.practiceControls {
+  display: flex;
+  align-items: center;
+  gap: 0.4em;
+}
+
+.speedControl {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid rgba($color-white, 0.2);
+  border-radius: 999px;
+  overflow: hidden;
+  font-size: $fs-small;
+  font-variant-numeric: tabular-nums;
+
+  > span {
+    min-width: 3.2em;
+    text-align: center;
+    font-weight: bold;
+  }
+
+  button {
+    padding: 0.2em 0.7em;
+    border: 0;
+    background: rgba($color-white, 0.08);
+    color: inherit;
+    font: inherit;
+    font-size: 1.1em;
+    cursor: pointer;
+
+    &:hover:not(:disabled) {
+      background: rgba($color-white, 0.2);
+    }
+
+    &:disabled {
+      opacity: 0.3;
+      cursor: default;
+    }
+  }
+}
+
+.speedSlow {
+  color: $color-warning-light;
+}
+
+.speedFast {
+  color: $color-success-light;
+}
+
+.stop {
+  gap: 0.4em;
+  font-weight: bold;
+}
+
+.kbd {
+  margin-left: 0.4em;
+  padding: 0 0.4em;
+  border: 1px solid rgba($color-white, 0.4);
+  border-radius: 3px;
+  font-family: inherit;
+  font-size: 0.75em;
+  font-weight: normal;
+  opacity: 0.8;
+}
+
+/** The player: the sections of the song, where it is, the practice markers **/
+
+.player {
+  display: flex;
+  align-items: center;
+  gap: 0.6em;
+  width: min(100%, 1200px);
+}
+
+.timeline {
+  display: flex;
+  flex: 1;
+  gap: 3px;
+  padding: 4px 0;
+  cursor: pointer;
+  touch-action: none;
+  user-select: none;
+
+  &--dragging {
+    cursor: col-resize;
+  }
+}
+
+.segment {
+  position: relative;
+  height: 1.9em;
+  min-width: 4px;
+  border-radius: 4px;
+  background: rgba($color-white, 0.08);
+  overflow: hidden;
+  transition:
+    background-color 0.2s,
+    opacity 0.2s;
+
+  &:hover {
+    background: rgba($color-white, 0.16);
+  }
+
+  &--now {
+    background: rgba($color-white, 0.14);
+    box-shadow: inset 0 0 0 1px rgba($color-warning-light, 0.7);
+  }
+
+  &--out {
+    opacity: 0.35;
+  }
+
+  &--marked {
+    background: rgba($color-primary-normal, 0.3);
+  }
+
+  // the practice markers: a bracket at each end
+  &--first {
+    border-left: 3px solid $color-primary-light;
+  }
+
+  &--last {
+    border-right: 3px solid $color-primary-light;
+  }
+
+  &--drag {
+    background: rgba($color-primary-normal, 0.55);
+  }
+}
+
+.segmentFill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: linear-gradient(
+    90deg,
+    rgba($color-warning-light, 0.15),
+    rgba($color-warning-light, 0.45)
+  );
+  pointer-events: none;
+}
+
+.segmentName {
+  position: relative;
+  display: block;
+  padding: 0 0.5em;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 0.72em;
+  line-height: 2.65em;
+  opacity: 0.85;
+  pointer-events: none;
+}
+
+.playerClear {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 0.3em;
+  padding: 0.25em 0.7em;
+  border: 1px solid rgba($color-primary-light, 0.5);
+  border-radius: 999px;
+  background: rgba($color-primary-normal, 0.2);
+  color: $color-white;
+  font: inherit;
+  font-size: $fs-small;
+  cursor: pointer;
+
+  &:hover {
+    background: rgba($color-primary-normal, 0.45);
+  }
+}
+
+/** Spotify while playing: one line **/
+
+.statusRow {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 0.4em 1em;
+  font-size: $fs-small;
+}
+
+.statusChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5em;
+  max-width: 60ch;
+  padding: 0.2em 0.8em;
+  border-radius: 999px;
+  background: rgba($color-black, 0.35);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+
+  &--ok {
+    color: $spotify;
+  }
+
+  &--warn {
+    color: $color-warning-light;
+  }
+
+  &--busy {
+    color: $color-primary-light;
+
+    .followDot {
+      animation: blink 1s infinite;
+    }
+  }
+}
+
+.followDot {
+  flex-shrink: 0;
+  width: 0.55em;
+  height: 0.55em;
+  border-radius: 50%;
+  background: currentColor;
+
+  // (paused)
+  &--off {
+    opacity: 0.35;
+  }
+}
+
+/** The chord to play, the beat, the lane **/
+
+.stage {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: min(1.8vh, 1.4vw);
+  width: 100%;
+  margin-block: auto;
+}
 
 .current {
   position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
-  min-height: min(16vh, 12vw);
   justify-content: center;
+  min-height: min(20vh, 15vw);
+}
+
+.sectionTag {
+  margin-bottom: 0.3em;
+  padding: 0.1em 0.8em;
+  border-radius: 999px;
+  background: rgba($color-white, 0.08);
+  font-size: $fs-small;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  opacity: 0.8;
 }
 
 .currentName {
-  font-size: clamp(36px, min(11vh, 8vw), 110px);
+  font-size: clamp(40px, min(12vh, 9vw), 120px);
   font-weight: bold;
   line-height: 1;
+  text-shadow: 0 4px 24px rgba($color-black, 0.5);
+}
+
+.currentName--rest {
+  opacity: 0.35;
 }
 
 .currentNumeral {
   font-family: Georgia, 'Times New Roman', serif;
-  font-size: clamp(16px, min(4vh, 3vw), 36px);
+  font-size: clamp(16px, min(3.6vh, 2.8vw), 32px);
   opacity: 0.8;
+}
+
+// the chords of the key, the one to play lit
+.keyStrip {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: stretch;
+  gap: 0.3em;
+  margin-top: 0.6em;
+  font-size: $fs-small;
+}
+
+.keyStripKey {
+  align-self: center;
+  margin-right: 0.3em;
+  color: $color-warning-light;
+  font-weight: bold;
+}
+
+.keyChord {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 2.6em;
+  padding: 0.15em 0.4em;
+  border: 1px solid hsl(var(--hue) 60% 60% / 25%);
+  border-radius: 0.4em;
+  background: hsl(var(--hue) 50% 30% / 25%);
+  color: rgba($color-white, 0.55);
+  line-height: 1.2;
+  transition: all 0.12s;
+
+  &--on {
+    border-color: hsl(var(--hue) 80% 70%);
+    background: hsl(var(--hue) 60% 40% / 85%);
+    color: $color-white;
+    transform: translateY(-2px);
+    box-shadow: 0 0 12px hsl(var(--hue) 80% 60% / 50%);
+  }
+
+  &--outside {
+    margin-left: 0.5em;
+    border-style: dashed;
+  }
+}
+
+.keyChordNumeral {
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 1.15em;
+}
+
+.then {
+  margin-top: 0.2em;
+  font-size: $fs-small;
+  opacity: 0.6;
 }
 
 .countIn {
@@ -150,19 +621,9 @@ $green: #2ecc40;
 
 .waiting {
   margin-top: 0.2em;
-  font-size: clamp(13px, min(2.4vh, 2vw), 22px);
+  font-size: $fs-small;
   color: $color-warning-light;
 }
-
-.slowed {
-  color: $color-warning-light;
-}
-
-.faster {
-  color: $green;
-}
-
-/** Beat **/
 
 .beats {
   display: flex;
@@ -170,11 +631,13 @@ $green: #2ecc40;
 }
 
 .beat {
-  width: min(2vh, 1.6vw);
-  height: min(2vh, 1.6vw);
+  width: min(1.8vh, 1.4vw);
+  height: min(1.8vh, 1.4vw);
   border-radius: 50%;
-  border: 2px solid rgba($color-white, 0.4);
-  transition: background-color 0.08s;
+  border: 2px solid rgba($color-white, 0.35);
+  transition:
+    background-color 0.08s,
+    transform 0.08s;
 
   &--first {
     border-color: rgba($color-white, 0.8);
@@ -183,18 +646,18 @@ $green: #2ecc40;
   &--on {
     background: $color-warning-light;
     border-color: $color-warning-light;
+    transform: scale(1.25);
   }
 }
 
-/** Lane **/
-
 .lane {
   position: relative;
-  width: min(92%, 1200px);
-  height: min(12vh, 9vw);
-  border-radius: 0.5em;
-  background: rgba($color-black, 0.35);
-  border: 1px solid $color-neutral-normal;
+  width: min(100%, 1200px);
+  height: min(14vh, 10vw);
+  border-radius: 0.6em;
+  background: linear-gradient(180deg, rgba($color-black, 0.45), rgba($color-black, 0.25));
+  border: 1px solid rgba($color-white, 0.1);
+  box-shadow: inset 0 2px 16px rgba($color-black, 0.4);
   overflow: hidden;
 }
 
@@ -205,11 +668,31 @@ $green: #2ecc40;
   width: 4px;
   margin-left: -2px;
   background: $color-warning-light;
-  box-shadow: 0 0 8px $color-warning-light;
-  z-index: 1;
+  box-shadow: 0 0 10px $color-warning-light;
+  z-index: 2;
 }
 
+.hitFlash {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 6px;
+  margin-left: -3px;
+  z-index: 1;
+  animation: flash 0.35s ease-out forwards;
+
+  &--perfect {
+    background: rgba($green, 0.6);
+  }
+
+  &--good {
+    background: rgba($color-primary-light, 0.5);
+  }
+}
+
+// each chord colored by its degree in the key (--hue)
 .block {
+  --hue: 215;
   position: absolute;
   top: 12%;
   bottom: 12%;
@@ -218,36 +701,41 @@ $green: #2ecc40;
   align-items: flex-start;
   justify-content: center;
   padding: 0 0.5em;
-  border-radius: 0.3em;
-  border-left: 4px solid $color-primary-light;
-  background: $color-primary-dark;
+  border-radius: 0.35em;
+  border-left: 4px solid hsl(var(--hue) 80% 65%);
+  background: hsl(var(--hue) 55% 30% / 0.9);
   font-size: clamp(12px, min(2.6vh, 2vw), 24px);
   white-space: nowrap;
   overflow: hidden;
 
   &--repeat {
-    top: 25%;
-    bottom: 25%;
-    opacity: 0.85;
+    top: 26%;
+    bottom: 26%;
+    opacity: 0.8;
   }
 
   &--next {
-    background: $color-primary-normal;
+    background: hsl(var(--hue) 60% 42%);
+    box-shadow: 0 0 14px hsl(var(--hue) 80% 55% / 0.5);
   }
 
   &--perfect {
-    background: rgba($green, 0.35);
+    background: rgba($green, 0.3);
     border-left-color: $green;
   }
 
   &--good {
-    background: rgba($color-primary-dark, 0.5);
+    background: hsl(var(--hue) 40% 25% / 0.5);
+  }
+
+  &--skipped {
+    opacity: 0.35;
   }
 
   &--miss {
-    background: rgba($color-danger-dark, 0.5);
+    background: rgba($color-danger-dark, 0.45);
     border-left-color: $color-danger-light;
-    opacity: 0.6;
+    opacity: 0.55;
   }
 }
 
@@ -261,26 +749,192 @@ $green: #2ecc40;
   opacity: 0.85;
 }
 
-/** Start and end **/
+/** Start and end: the song card **/
+
+.card {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 1em;
+  width: min(100%, 52em);
+  margin-block: auto;
+  padding: 1.2em 1.4em;
+  border-radius: 0.9em;
+  background: rgba($color-black, 0.45);
+  border: 1px solid rgba($color-white, 0.08);
+  box-shadow: 0 10px 40px rgba($color-black, 0.4);
+  backdrop-filter: blur(6px);
+  animation: appear 0.3s ease;
+
+  &--done {
+    border-color: rgba($green, 0.5);
+  }
+}
+
+.cardHead {
+  display: flex;
+  align-items: center;
+  gap: 1.2em;
+  text-align: left;
+}
+
+.cardInfo {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35em;
+  min-width: 0;
+}
+
+.cardTitle {
+  font-size: 1.7em;
+  font-weight: bold;
+  line-height: 1.1;
+}
+
+.cardArtist {
+  font-size: 1.05em;
+  opacity: 0.75;
+}
+
+.cardPlay {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 0.7em;
+}
+
+.startButton {
+  padding-inline: 1.4em;
+  font-weight: bold;
+}
+
+.songPicker {
+  min-width: 16em;
+  flex: 1;
+  max-width: 24em;
+  text-align: left;
+}
+
+.tabs {
+  display: flex;
+  justify-content: center;
+  gap: 0.3em;
+  border-bottom: 1px solid rgba($color-white, 0.1);
+}
+
+.tab {
+  padding: 0.4em 1em;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: rgba($color-white, 0.6);
+  font: inherit;
+  font-size: 0.9em;
+  cursor: pointer;
+
+  &:hover {
+    color: $color-white;
+  }
+
+  &--on {
+    border-bottom-color: $color-warning-light;
+    color: $color-white;
+  }
+}
+
+.tabPanel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.8em;
+  min-height: 6em;
+}
+
+.hint {
+  max-width: 40em;
+  margin-inline: auto;
+  font-size: $fs-small;
+  opacity: 0.6;
+}
+
+.more {
+  font-size: 0.9em;
+
+  summary {
+    cursor: pointer;
+    opacity: 0.7;
+  }
+
+  &[open] summary {
+    margin-bottom: 0.8em;
+  }
+}
+
+/** Results **/
+
+.result {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1.2em;
+  text-align: left;
+}
+
+.grade {
+  display: grid;
+  place-items: center;
+  width: 2.2em;
+  height: 2.2em;
+  border-radius: 50%;
+  border: 3px solid currentColor;
+  font-size: 2.2em;
+  font-weight: bold;
+  animation: count 0.4s ease;
+
+  &--S {
+    color: $color-warning-light;
+    box-shadow: 0 0 24px rgba($color-warning-light, 0.5);
+  }
+
+  &--A {
+    color: $green;
+  }
+
+  &--B {
+    color: $color-primary-light;
+  }
+
+  &--C,
+  &--D {
+    color: $color-danger-light;
+  }
+}
+
+.resultText {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4em;
+}
 
 .panel {
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 0.8em;
+  margin-block: auto;
   padding: 1em 1.5em;
-  border-radius: 0.6em;
+  border-radius: 0.8em;
   background: rgba($color-black, 0.5);
-  font-size: clamp(13px, min(2.4vh, 2vw), 22px);
   animation: appear 0.3s ease;
 
-  &--done {
-    border: 2px solid $green;
+  &--spotify {
+    border: 2px solid $spotify;
   }
 }
 
 .panelTitle {
-  font-size: 1.3em;
+  font-size: 1.25em;
 }
 
 .panelText {
@@ -291,8 +945,8 @@ $green: #2ecc40;
 .stats {
   display: flex;
   flex-wrap: wrap;
-  justify-content: center;
-  gap: 0.4em 1.2em;
+  gap: 0.3em 1.1em;
+  font-size: 0.9em;
 }
 
 .stat--perfect {
@@ -315,68 +969,7 @@ $green: #2ecc40;
   gap: 0.8em;
 }
 
-.songPicker {
-  min-width: 16em;
-  text-align: left;
-}
-
-/** Practice **/
-
-.practice {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  align-items: center;
-  gap: 0.5em 1em;
-}
-
-.practiceField {
-  display: flex;
-  align-items: center;
-  gap: 0.4em;
-  text-align: left;
-
-  > :last-child {
-    min-width: 9em;
-  }
-}
-
-.practiceSwitch {
-  display: flex;
-  align-items: center;
-  gap: 0.3em;
-  cursor: pointer;
-}
-
-.practiceInfo {
-  font-size: clamp(12px, min(2.2vh, 1.8vw), 20px);
-  color: $color-primary-light;
-}
-
-.stop {
-  position: absolute;
-  top: 0.8em;
-  right: 0.8em;
-  z-index: 2;
-  gap: 0.4em;
-  padding: 0.5em 1.1em;
-  font-size: clamp(13px, min(2.2vh, 1.8vw), 18px);
-  font-weight: bold;
-  box-shadow: 0 2px 10px rgba($color-black, 0.5);
-}
-
-.stopKey {
-  margin-left: 0.3em;
-  padding: 0 0.4em;
-  border: 1px solid rgba($color-white, 0.5);
-  border-radius: 3px;
-  font-family: inherit;
-  font-size: 0.75em;
-  font-weight: normal;
-  opacity: 0.85;
-}
-
-/** Parts of the song heard **/
+/** Parts of the song: heard, and played **/
 
 .parts {
   display: flex;
@@ -403,6 +996,11 @@ $green: #2ecc40;
   text-decoration: line-through;
   cursor: pointer;
 
+  // a choice (the part you play), not a part muted
+  &--choice {
+    text-decoration: none;
+  }
+
   &--on {
     border-color: $color-primary-light;
     background: rgba($color-primary-normal, 0.45);
@@ -411,48 +1009,515 @@ $green: #2ecc40;
   }
 }
 
-/** Spotify **/
-
-.spotifyLine {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
+// an on/off switch (guessed chords)
+.switch {
+  display: inline-flex;
   align-items: center;
-  gap: 0.6em;
-  font-size: 0.9em;
+  gap: 0.5em;
+  padding: 0.15em 0.7em 0.15em 0.25em;
+  border: 1px solid rgba($color-white, 0.2);
+  border-radius: 999px;
+  background: rgba($color-black, 0.25);
+  color: rgba($color-white, 0.75);
+  font: inherit;
+  cursor: pointer;
 
-  strong {
-    color: #1ed760;
+  &:hover {
+    background: rgba($color-white, 0.08);
   }
 }
 
+.switchTrack {
+  position: relative;
+  width: 2.2em;
+  height: 1.2em;
+  border-radius: 999px;
+  background: rgba($color-white, 0.25);
+  transition: background 0.15s;
+}
+
+.switchKnob {
+  position: absolute;
+  top: 0.15em;
+  left: 0.15em;
+  width: 0.9em;
+  height: 0.9em;
+  border-radius: 50%;
+  background: $color-white;
+  transition: transform 0.15s;
+}
+
+.switchState {
+  min-width: 1.6em;
+  font-size: 0.85em;
+  font-weight: bold;
+  opacity: 0.7;
+}
+
+.switch--on {
+  color: $color-white;
+  border-color: rgba($color-primary-light, 0.6);
+
+  .switchTrack {
+    background: $color-primary-normal;
+  }
+
+  .switchKnob {
+    transform: translateX(1em);
+  }
+
+  .switchState {
+    color: $color-primary-light;
+    opacity: 1;
+  }
+}
+
+/** Spotify on the start screen **/
+
+.spotifyCard {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5em;
+  margin-top: 0.3em;
+}
+
+.spotifyBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5em;
+  padding: 0.15em 0.8em;
+  border-radius: 999px;
+  background: rgba($spotify, 0.12);
+  color: $spotify;
+  font-size: $fs-small;
+
+  &--off {
+    background: rgba($color-warning-normal, 0.12);
+    color: $color-warning-light;
+  }
+}
+
+.linkButton {
+  margin-left: 0.6em;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.syncMenu {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5em;
+  flex-basis: 100%;
+  padding: 0.5em 0.7em;
+  border-radius: 0.5em;
+  background: rgba($color-white, 0.05);
+}
+
 .spotifyStatus {
-  font-size: clamp(12px, min(2.2vh, 1.8vw), 18px);
+  font-size: $fs-small;
   color: $color-warning-light;
+
+  &--ok {
+    color: $spotify;
+  }
 }
 
-.spotifyStatus--ok {
-  color: #1ed760;
+/** Following Spotify **/
+
+.follow {
+  display: flex;
+  align-items: center;
+  gap: 0.6em;
+  padding: 0.4em 0.5em 0.4em 0.9em;
+  border-radius: 999px;
+  background: rgba($spotify, 0.08);
+  border: 1px solid rgba($spotify, 0.25);
+  color: rgba($color-white, 0.85);
+  font-size: $fs-small;
+  text-align: left;
+
+  > .followDot {
+    color: $spotify;
+    animation: blink 1.6s infinite;
+  }
+
+  > span:not(.followDot) {
+    flex: 1;
+    min-width: 0;
+  }
+
+  &--on > .followDot {
+    animation: none;
+  }
 }
 
-.panel--spotify {
-  border: 2px solid #1ed760;
+.followCover {
+  width: 1.8em;
+  height: 1.8em;
+  border-radius: 0.25em;
+  object-fit: cover;
 }
+
+.followOff {
+  display: grid;
+  place-items: center;
+  width: 1.8em;
+  height: 1.8em;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: inherit;
+  opacity: 0.6;
+  cursor: pointer;
+
+  &:hover {
+    opacity: 1;
+    background: rgba($color-white, 0.1);
+  }
+}
+
+.corner {
+  position: absolute;
+  top: 0.8em;
+  right: 1em;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 0.6em;
+}
+
+/* what Spotify plays now, to play along with it */
+.nowPlaying {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.8em;
+  width: 100%;
+  margin-bottom: 1em;
+  padding: 0.6em 0.7em;
+  border: 1px solid rgba($spotify, 0.35);
+  border-radius: 14px;
+  background: linear-gradient(90deg, rgba($spotify, 0.16), rgba($color-black, 0.25) 70%);
+
+  &--found {
+    border-color: rgba($spotify, 0.6);
+    box-shadow: 0 0 24px rgba($spotify, 0.15);
+  }
+}
+
+.nowPlayingCover,
+.nowPlayingIcon {
+  flex-shrink: 0;
+  width: 2.8em;
+  height: 2.8em;
+  border-radius: 8px;
+}
+
+.nowPlayingCover {
+  object-fit: cover;
+}
+
+.nowPlayingIcon {
+  display: grid;
+  place-items: center;
+  background: rgba($spotify, 0.2);
+  color: $spotify;
+  font-size: 1.2em;
+}
+
+// a call to Spotify that failed
+.spotifyError {
+  display: flex;
+  align-items: center;
+  gap: 0.6em;
+  width: 100%;
+  max-width: 48em;
+  margin: 0 auto 1em;
+  padding: 0.55em 0.6em 0.55em 0.9em;
+  border: 1px solid rgba($color-danger-light, 0.6);
+  border-radius: 10px;
+  background: rgba($color-danger-dark, 0.45);
+  color: $color-white;
+  font-size: $fs-small;
+
+  > span {
+    flex: 1;
+  }
+
+  strong {
+    color: $color-danger-light;
+  }
+}
+
+.spotifyErrorClose {
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  padding: 0.25em;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+
+  &:hover {
+    background: rgba($color-white, 0.15);
+  }
+}
+
+// a Spotify-green pill button
+.spotifyButton {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 0.45em;
+  padding: 0.5em 1.1em;
+  border: 0;
+  border-radius: 999px;
+  background: $spotify;
+  color: $color-black;
+  font: inherit;
+  font-weight: bold;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: transform 0.1s, filter 0.1s;
+
+  &:hover:not(:disabled) {
+    filter: brightness(1.1);
+    transform: scale(1.03);
+  }
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: default;
+  }
+
+  &--quiet {
+    background: transparent;
+    border: 1px solid rgba($spotify, 0.5);
+    color: $spotify;
+    font-weight: normal;
+  }
+
+  &--youtube {
+    background: $youtube;
+    color: $color-white;
+  }
+}
+
+// a few things playing (browsers, Spotify): the one to play along with is picked
+.nowPlayingChoices {
+  display: flex;
+  flex-basis: 100%;
+  flex-wrap: wrap;
+  gap: 0.4em;
+}
+
+.nowPlayingChoice {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45em;
+  max-width: 100%;
+  padding: 0.35em 0.8em;
+  border: 1px solid rgba($color-white, 0.15);
+  border-radius: 999px;
+  background: rgba($color-black, 0.25);
+  color: inherit;
+  font: inherit;
+  font-size: $fs-small;
+  cursor: pointer;
+
+  .followDot {
+    color: $spotify;
+  }
+
+  small {
+    opacity: 0.6;
+    text-transform: uppercase;
+  }
+
+  strong,
+  span:last-child {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  span:last-child {
+    opacity: 0.7;
+  }
+
+  &:hover {
+    border-color: rgba($spotify, 0.5);
+  }
+
+  &--on {
+    border-color: $spotify;
+    background: rgba($spotify, 0.15);
+  }
+}
+
+// where a song typed plays: YouTube, Spotify, or not at all
+.playOn {
+  display: inline-flex;
+  flex-shrink: 0;
+  padding: 2px;
+  border-radius: 999px;
+  background: rgba($color-black, 0.35);
+}
+
+.playOnChoice {
+  padding: 0.35em 0.8em;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: rgba($color-white, 0.65);
+  font: inherit;
+  font-size: $fs-small;
+  white-space: nowrap;
+  cursor: pointer;
+
+  &:hover {
+    color: $color-white;
+  }
+
+  &--on {
+    color: $color-white;
+    font-weight: bold;
+  }
+
+  &--on#{&}--youtube {
+    background: $youtube;
+  }
+
+  &--on#{&}--spotify {
+    background: $spotify;
+    color: $color-black;
+  }
+
+  &--on#{&}--none {
+    background: rgba($color-white, 0.2);
+  }
+}
+
+// a song picked to play without its recording
+.nowPlayingOff {
+  display: flex;
+  flex-basis: 100%;
+  align-items: center;
+  gap: 0.6em;
+  font-size: $fs-small;
+  opacity: 0.8;
+
+  button {
+    padding: 0.2em 0.7em;
+    border: 1px solid rgba($spotify, 0.5);
+    border-radius: 999px;
+    background: transparent;
+    color: $spotify;
+    font: inherit;
+    cursor: pointer;
+  }
+}
+
+// a song to play, typed by its name: its own line, under what plays
+.nowPlayingLink {
+  display: flex;
+  flex-basis: 100%;
+  gap: 0.6em;
+
+  input {
+    flex: 1;
+    min-width: 0;
+    padding: 0.45em 0.9em;
+    border: 1px solid rgba($youtube, 0.45);
+    border-radius: 999px;
+    background: rgba($color-black, 0.3);
+    color: $color-white;
+    font: inherit;
+    font-size: $fs-small;
+
+    &:focus {
+      outline: none;
+      border-color: $youtube;
+    }
+  }
+}
+
+.nowPlayingText {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.2;
+  font-size: $fs-small;
+
+  small {
+    color: $spotify;
+    font-size: 0.8em;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  span {
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+}
+
 
 /** Volume bars while playing **/
 
-.mixerToggle {
-  position: absolute;
-  top: 0.8em;
-  left: 0.8em;
-  z-index: 2;
+.mixerDock {
   display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 0.4em;
+  justify-content: center;
+  max-width: 100%;
+  animation: appear 0.15s ease-out;
+}
 
-  > :last-child:not(:first-child) {
-    background: rgba($color-black, 0.85);
+/* while playing: over the game, at the bottom (always in sight, however tall the window) */
+.mixerDock--float {
+  position: fixed;
+  bottom: 1em;
+  left: 50%;
+  z-index: 20;
+  transform: translateX(-50%);
+  flex-direction: column;
+  align-items: center;
+  gap: 0.6em;
+  width: max-content;
+  max-width: calc(100vw - 32px);
+  max-height: 45vh;
+  overflow: auto;
+  padding: 0.8em 1em 1em;
+  border-radius: 12px;
+  background: rgb(20 20 24 / 92%);
+  box-shadow: 0 12px 40px rgb(0 0 0 / 50%);
+}
+
+.mixerClose {
+  align-self: flex-end;
+  display: inline-flex;
+  padding: 0.2em;
+  border: 0;
+  border-radius: 6px;
+  color: inherit;
+  background: transparent;
+  cursor: pointer;
+  opacity: 0.7;
+
+  &:hover {
+    opacity: 1;
+    background: rgb(255 255 255 / 10%);
   }
 }
 
@@ -464,7 +1529,11 @@ $green: #2ecc40;
   justify-content: center;
   align-items: center;
   gap: 0.4em;
-  font-size: clamp(12px, min(2.2vh, 1.8vw), 18px);
+  font-size: $fs-small;
+
+  &--compact .latencyValue {
+    min-width: 4em;
+  }
 }
 
 .latencyLabel {
@@ -500,6 +1569,5 @@ $green: #2ecc40;
 .latencyHint {
   flex-basis: 100%;
   text-align: center;
-  font-size: 0.85em;
-  color: #1ed760;
+  color: $spotify;
 }

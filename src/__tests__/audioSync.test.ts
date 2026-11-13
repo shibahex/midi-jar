@@ -3,7 +3,7 @@ import { Chord, Note } from 'tonal';
 import {
   buildSongTemplate,
   chromaOfSamples,
-  findFirstChordMs,
+  findKeyShift,
   HeardFrame,
 } from '../renderer/helpers/audioSync';
 
@@ -14,7 +14,13 @@ const beatMs = 500;
 const leadIn = 2;
 
 /** What a recording with its first chord at firstChordMs sounds like, from 0 to lengthMs */
-function record(firstChordMs: number, fromMs: number, lengthMs: number, noise = 0.3) {
+function record(
+  firstChordMs: number,
+  fromMs: number,
+  lengthMs: number,
+  noise = 0.3,
+  semitones = 0
+) {
   let seed = 1;
   const random = () => {
     seed = (seed * 16807) % 2147483647;
@@ -26,39 +32,21 @@ function record(firstChordMs: number, fromMs: number, lengthMs: number, noise = 
     const chroma = new Float32Array(12).map(() => random() * noise);
     const chord = chords[bar]?.chord;
     chord?.notes.forEach((note) => {
-      chroma[Note.chroma(note) ?? 0] += 1;
+      chroma[((Note.chroma(note) ?? 0) + semitones + 12) % 12] += 1;
     });
     frames.push({ positionMs, chroma });
   }
   return frames;
 }
 
-describe('syncing by listening', () => {
+describe('hearing a recording', () => {
   const template = buildSongTemplate(chords, 4, leadIn);
 
-  it('finds the first chord near a wrong guess', () => {
-    const heard = record(3200, 0, 15000);
-    const found = findFirstChordMs(heard, template, beatMs, leadIn, 2500, 1500);
-    expect(found).not.toBeNull();
-    expect(Math.abs((found?.firstChordMs ?? 0) - 3200)).toBeLessThanOrEqual(40);
-  });
-
-  it('works from the middle of the song', () => {
-    const heard = record(1800, 9000, 10000);
-    const found = findFirstChordMs(heard, template, beatMs, leadIn, 2100, 1000);
-    expect(Math.abs((found?.firstChordMs ?? 0) - 1800)).toBeLessThanOrEqual(40);
-  });
-
-  it('keeps the nearest place when the song repeats', () => {
-    // the first 2 loops are the same: a guess near the right place stays there
-    const heard = record(2000, 2000, 7500, 0.05);
-    const found = findFirstChordMs(heard, template, beatMs, leadIn, 2100, 8000);
-    expect(Math.abs((found?.firstChordMs ?? 0) - 2000)).toBeLessThanOrEqual(40);
-  });
-
-  it('finds nothing in noise', () => {
-    const heard = record(-1e9, 0, 10000, 1);
-    expect(findFirstChordMs(heard, template, beatMs, leadIn, 2000, 1000)).toBeNull();
+  it('hears the key of the recording', () => {
+    expect(findKeyShift(record(2000, 0, 15000), template).semitones).toBe(0);
+    const higher = record(2000, 0, 15000, 0.3, 2);
+    const key = findKeyShift(higher, template);
+    expect(key.semitones).toBe(2);
   });
 
   it('hears the notes of a chord', () => {

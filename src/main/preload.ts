@@ -29,7 +29,8 @@ export const AppApi = {
   fetchPage: (url: string): Promise<string> => ipcRenderer.invoke('app:fetchPage', url),
   /** the sound played by the computer: chunks of samples, and when the last one was heard */
   sound: {
-    start: (): Promise<string> => ipcRenderer.invoke('app:sound:start'),
+    /** (the song's link: a YouTube video is heard alone) */
+    start: (uri?: string): Promise<string> => ipcRenderer.invoke('app:sound:start', uri),
     stop: (): Promise<void> => ipcRenderer.invoke('app:sound:stop'),
     onData: (callback: (samples: Float32Array, at: number) => void) =>
       registerListener('app:sound:data')(callback),
@@ -48,6 +49,21 @@ export const AppApi = {
     redirectUri: (): Promise<string> => ipcRenderer.invoke('spotify:redirectUri'),
     volume: (percent: number): Promise<void> => ipcRenderer.invoke('spotify:volume', percent),
     bars: (uri: string): Promise<number[] | null> => ipcRenderer.invoke('spotify:bars', uri),
+    /** everything playing on Spotify and in the browsers (YouTube), to pick one */
+    players: (): Promise<SpotifyPlayer[]> => ipcRenderer.invoke('spotify:players'),
+    /** follows the one picked (a track or video's link) */
+    select: (uri: string): Promise<void> => ipcRenderer.invoke('spotify:select', uri),
+  },
+  /** YouTube videos (played through the calls of spotify, with their "youtube:" links) */
+  youtube: {
+    search: (query: string): Promise<SpotifyTrack | null> =>
+      ipcRenderer.invoke('youtube:search', query),
+    /** a video from its link */
+    video: (link: string): Promise<SpotifyTrack> => ipcRenderer.invoke('youtube:video', link),
+    /** MIDI Jar's browser extension: its folder, and whether a browser has it */
+    extension: (): Promise<{ path: string; connected: boolean }> =>
+      ipcRenderer.invoke('youtube:extension'),
+    openExtension: (): Promise<void> => ipcRenderer.invoke('youtube:openExtension'),
   },
   settings: {
     clear: () => ipcRenderer.send('app:settings:clear'),

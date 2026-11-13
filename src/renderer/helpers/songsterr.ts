@@ -18,6 +18,9 @@ const MAX_PART_NOTES = 8000;
 type TrackInfo = {
   partId: number;
   name?: string;
+  /** what it is played on ("Overdriven Guitar"), and its title (named after it when no name) */
+  instrument?: string;
+  title?: string;
   views?: number;
   isGuitar?: boolean;
   isBassGuitar?: boolean;
@@ -110,8 +113,12 @@ export function readSongsterrPage(html: string): SongsterrSong | null {
   }
 }
 
+/** Other instruments kept (piano, strings, synth...), to be played by the player */
+const MAX_OTHER_PARTS = 6;
+
 /**
- * Tracks to read: the rhythm guitar (chords), the bass, the lead guitar and the vocal melody
+ * Tracks to read: the rhythm guitar (chords), the bass, the lead guitar and the vocal melody,
+ * then the other instruments (not the drums)
  */
 export function getSongsterrTracks(song: SongsterrSong): SongsterrTrackRef[] {
   const tracks = song.tracks
@@ -137,11 +144,28 @@ export function getSongsterrTracks(song: SongsterrSong): SongsterrTrackRef[] {
     ['lead', lead !== rhythm ? lead : undefined],
     ['melody', melody],
   ];
-  return refs
+  const used = refs.map(([, track]) => track);
+  const others = tracks
+    .filter((track) => !used.includes(track))
+    .sort(byViews)
+    .slice(0, MAX_OTHER_PARTS)
+    .map((track): [SongPartRole, TrackInfo] => ['other', track]);
+  // each its own name (without Songsterr's notes on it: "Piano (retranscribed)")
+  const names = new Map<string, number>();
+  const nameOf = (track: TrackInfo, role: string) => {
+    const name =
+      (track.name || track.title || track.instrument || role)
+        .replace(/\s*\((re)?transcribed\)\s*$/i, '')
+        .trim() || role;
+    const count = (names.get(name) ?? 0) + 1;
+    names.set(name, count);
+    return count > 1 ? `${name} ${count}` : name;
+  };
+  return [...refs, ...others]
     .filter((ref): ref is [SongPartRole, TrackInfo] => !!ref[1])
     .map(([role, track]) => ({
       role,
-      name: track.name ?? role,
+      name: nameOf(track, role),
       url: `${CDN}/${song.songId}/${song.revisionId}/${song.image}/${track.partId}.json`,
     }));
 }
@@ -155,9 +179,9 @@ const isPowerOf2 = (n: number) => n > 0 && 2 ** Math.round(Math.log2(n)) === n;
 function beatLength(beat: Beat) {
   if (beat.graceNote) return 0;
   const [num, den] = beat.duration ?? [1, 4];
+  // (a dotted note is written with its whole length already: a dotted half is 3/4, its dot
+  // only tells how it is drawn)
   let length = (num / den) * 4;
-  if (beat.dots === 1) length *= 1.5;
-  if (beat.dots === 2) length *= 1.75;
   // tuplets: Songsterr already writes most as exact lengths (1/24 for a triplet 16th)
   if (beat.tuplet && beat.tuplet > 1 && isPowerOf2(den)) {
     length *= 2 ** Math.floor(Math.log2(beat.tuplet)) / beat.tuplet;
@@ -187,6 +211,35 @@ function mainTempo(tempos: { measure: number; bpm: number }[], lengths: number[]
     (best, entry) => (!best || entry[1] > best[1] ? entry : best),
     null
   )?.[0];
+}
+
+/**
+ * The song's time in beats of its main tempo: a part at another tempo (an intro at 100 BPM in
+ * a song at 194) lasts as long as it does in the song (positions in quarter notes)
+ */
+function tempoWarp(
+  tempos: { measure: number; bpm: number }[],
+  measureStarts: number[],
+  main: number
+) {
+  const sorted = [...tempos]
+    .filter((t) => t.bpm > 0)
+    .sort((a, b) => a.measure - b.measure)
+    .map((t) => ({ from: measureStarts[t.measure] ?? Infinity, ratio: main / t.bpm }));
+  if (!sorted.length) return (position: number) => position;
+  return (position: number) => {
+    let warped = 0;
+    let at = 0;
+    // before the first tempo: the first one
+    let { ratio } = sorted[0];
+    sorted.forEach((tempo) => {
+      if (tempo.from > position) return;
+      warped += (tempo.from - at) * ratio;
+      at = tempo.from;
+      ratio = tempo.ratio;
+    });
+    return warped + (position - at) * ratio;
+  };
 }
 
 type PlayedNote = { start: number; length: number; midi: number; velocity: number };
@@ -261,17 +314,30 @@ const MAJOR_KEY_TRIADS: Record<number, string> = {
   11: 'dim',
 };
 
+/** The pitch classes clearly played in a part of a song (a tenth of it or more) */
+function notesPlayed(weights: number[]) {
+  const total = weights.reduce((a, b) => a + b, 0);
+  return total > 0
+    ? weights.map((w, pc) => (w / total >= 0.1 ? pc : -1)).filter((pc) => pc >= 0)
+    : [];
+}
+
+/** A chord of the key fits a little better than one out of it (when the notes allow both) */
+const IN_KEY_BONUS = 0.12;
+
 /**
  * Chord of a part of a measure: the major or minor triad that fits the notes best
- * (the bass helps find the root). Power chords take the quality of the key.
+ * (the bass helps find the root, the chords of the key come first). Power chords take the
+ * quality of the key.
  */
 function findChord(weights: number[], bass: number | null, key: { tonic: number; minor: boolean }) {
   const total = weights.reduce((a, b) => a + b, 0);
   if (total <= 0) return null;
   const w = weights.map((x) => x / total);
   const max = Math.max(...w);
+  const relativeMajor = key.minor ? (key.tonic + 3) % 12 : key.tonic;
 
-  const best = Array.from({ length: 24 }, (_, i) => {
+  const candidates = Array.from({ length: 24 }, (_, i) => {
     const root = i % 12;
     const quality = i >= 12 ? 'm' : '';
     const third = (root + (quality === 'm' ? 3 : 4)) % 12;
@@ -279,19 +345,49 @@ function findChord(weights: number[], bass: number | null, key: { tonic: number;
     const inChord = w[root] + w[third] + w[fifth];
     let score = w[root] * 1.2 + w[third] + w[fifth] * 0.8 - (1 - inChord) * 0.6;
     if (bass === root) score += 0.4 * max;
-    return { root, quality, score };
-  }).reduce((a, b) => (b.score > a.score ? b : a));
+    if (MAJOR_KEY_TRIADS[(root - relativeMajor + 12) % 12] === quality) score += IN_KEY_BONUS;
+    // how many of its notes are played (a tenth of the time or more)
+    const played = [root, third, fifth].filter((pc) => w[pc] >= 0.1).length;
+    return { root, quality, score, played };
+  });
+  // a chord has 2 of the notes played or more (one note ringing long is not a chord of its
+  // own: a C# over G D B is a color of G, not C#)
+  const most = Math.min(2, Math.max(...candidates.map((c) => c.played)));
+  const best = candidates
+    .filter((c) => c.played >= most)
+    .reduce((a, b) => (b.score > a.score ? b : a));
 
   // no third played (power chord): major or minor as in the key
   const { root } = best;
   let { quality } = best;
   if (w[(root + 3) % 12] < 0.04 && w[(root + 4) % 12] < 0.04) {
-    const relativeMajor = key.minor ? (key.tonic + 3) % 12 : key.tonic;
     const degreeTriad = MAJOR_KEY_TRIADS[(root - relativeMajor + 12) % 12];
     quality = degreeTriad === 'm' ? 'm' : '';
   }
   return { root, quality };
 }
+
+/** Two different notes sound together in a part of a measure (more than a moment) */
+function playedTogether(notes: PlayedNote[], segment: { start: number; length: number }) {
+  const end = segment.start + segment.length;
+  const inside = notes.filter((n) => n.start < end && n.start + n.length > segment.start);
+  return inside.some((a, i) =>
+    inside
+      .slice(i + 1)
+      .some(
+        (b) =>
+          a.midi % 12 !== b.midi % 12 &&
+          Math.min(a.start + a.length, b.start + b.length, end) -
+            Math.max(a.start, b.start, segment.start) >
+            0.1
+      )
+  );
+}
+
+/** No chord played (written like in chord sheets) */
+export const NO_CHORD = 'N.C.';
+/** No chord for less than this (beats): the chord before goes on */
+const BEATS_PER_REST = 4;
 
 /** Chord names written in a track, with when they start */
 function readWrittenChords(track: SongsterrTrack, measureStarts: number[]) {
@@ -328,9 +424,15 @@ export function songFromSongsterr(
     return position + length;
   }, 0);
 
+  // the notes of each track (several are other instruments), and of the main parts by role
+  const trackNotes = tracks.map(({ track }) => readNotes(track, measureStarts));
   const notesOf = new Map(
-    tracks.map(({ role, track }) => [role, readNotes(track, measureStarts)] as const)
+    tracks.map(({ role }, i) => [role, trackNotes[i]] as const).filter(([role]) => role !== 'other')
   );
+  const tempos =
+    tracks.find(({ track }) => track.automations?.tempo?.length)?.track.automations?.tempo ?? [];
+  const tempo = mainTempo(tempos, lengths);
+  const warp = tempo ? tempoWarp(tempos, measureStarts, tempo) : (position: number) => position;
 
   // parts of each measure: halves of 4/4 measures, whole shorter ones
   const segments = lengths.flatMap((length, m) => {
@@ -384,20 +486,40 @@ export function songFromSongsterr(
     written.length >= Math.max(4, lengths.length / 2) && written[0].time <= playedFrom + 8;
   const timeline: { time: number; name: string | null }[] = useWritten
     ? written
-    : segments.map((segment) => {
-        const bassMax = Math.max(...segment.bass);
-        const bass = bassMax > 0 ? segment.bass.indexOf(bassMax) : null;
-        const found = findChord(segment.weights, bass, key);
-        return {
-          time: segment.start,
-          name: found ? `${names[found.root]}${found.quality}` : null,
-        };
-      });
-  // a new section starts on its own chord
-  const songEnd = measureStarts[measureStarts.length - 1] + lengths[lengths.length - 1];
-  const changes = [...timeline, ...sectionTimes.map((time) => ({ time, name: undefined }))].sort(
-    (a, b) => a.time - b.time
-  );
+    : (() => {
+        let previous: { root: number; quality: string } | null = null;
+        let previousNotes: number[] = [];
+        return segments.map((segment) => {
+          const bassMax = Math.max(...segment.bass);
+          const bass = bassMax > 0 ? segment.bass.indexOf(bassMax) : null;
+          // the same notes as before (an arpeggio starting elsewhere): the same chord
+          const notes = notesPlayed(segment.weights);
+          // a chord is played: 3 notes or more, or 2 over a bass or together (a power chord);
+          // else no chord (a few notes of a riff while someone sings)
+          const chordPlayed =
+            notes.length >= 3 ||
+            (notes.length === 2 && (bass !== null || playedTogether(harmony, segment)));
+          if (!chordPlayed) return { time: segment.start, name: NO_CHORD };
+          const same =
+            previous &&
+            notes.length > 0 &&
+            notes.length === previousNotes.length &&
+            notes.every((pc) => previousNotes.includes(pc));
+          const found = same ? previous : findChord(segment.weights, bass, key);
+          previous = found ?? previous;
+          if (notes.length) previousNotes = notes;
+          return {
+            time: segment.start,
+            name: found ? `${names[found.root]}${found.quality}` : null,
+          };
+        });
+      })();
+  // a new section starts on its own chord (times in beats of the main tempo from here)
+  const songEnd = warp(measureStarts[measureStarts.length - 1] + lengths[lengths.length - 1]);
+  const changes = [
+    ...timeline.map((change) => ({ ...change, time: warp(change.time) })),
+    ...sectionTimes.map((time) => ({ time: warp(time), name: undefined })),
+  ].sort((a, b) => a.time - b.time);
 
   const chords: string[] = [];
   const beats: number[] = [];
@@ -405,10 +527,11 @@ export function songFromSongsterr(
   let current: string | null = null;
   changes.forEach((change, i) => {
     const end = changes[i + 1]?.time ?? songEnd;
-    if (end - change.time <= 1e-6 && change.name === undefined) return;
     const isSection = change.name === undefined;
     const name = isSection ? current : change.name;
     current = name ?? current;
+    // lasting no time (a chord on the beat a section starts on): the section plays it
+    if (end - change.time <= 1e-6) return;
     if (!name) {
       // silence: the chord before goes on (nothing before: the song has not started)
       if (beats.length) beats[beats.length - 1] += end - change.time;
@@ -422,11 +545,37 @@ export function songFromSongsterr(
       chordStarts.push(change.time);
     }
   });
+  // no chord for less than a bar (a break, a fill): the chord before goes on
+  for (let i = chords.length - 1; i >= 1; i -= 1) {
+    if (chords[i] === NO_CHORD && beats[i] < BEATS_PER_REST) {
+      beats[i - 1] += beats[i];
+      chords.splice(i, 1);
+      beats.splice(i, 1);
+      chordStarts.splice(i, 1);
+    }
+  }
+  for (let i = chords.length - 1; i >= 1; i -= 1) {
+    if (chords[i] === chords[i - 1]) {
+      beats[i - 1] += beats[i];
+      chords.splice(i, 1);
+      beats.splice(i, 1);
+      chordStarts.splice(i, 1);
+    }
+  }
+  // (the song starts with its first chord)
+  while (chords[0] === NO_CHORD) {
+    chords.shift();
+    beats.shift();
+    chordStarts.shift();
+  }
   if (!chords.length) return { error: 'No chords found in this Songsterr song' };
 
   // sections: the first chord at or after each marker
   const sections = markers
-    .map(({ name, time }) => ({ name, start: chordStarts.findIndex((t) => t >= time - 1e-6) }))
+    .map(({ name, time }) => ({
+      name,
+      start: chordStarts.findIndex((t) => t >= warp(time) - 1e-6),
+    }))
     // markers before the first chord all point to it: the last one names it
     .filter(
       (section, i, all) =>
@@ -437,18 +586,18 @@ export function songFromSongsterr(
   const firstChord = chordStarts[0];
   const firstNote = Math.min(
     firstChord,
-    ...[...notesOf.values()].map((notes) => notes[0]?.start ?? Infinity)
+    ...trackNotes.map((notes) => (notes[0] ? warp(notes[0].start) : Infinity))
   );
   const parts = tracks
-    .map(({ role, name }) => ({
+    .map(({ role, name }, i) => ({
       role,
       name,
-      notes: (notesOf.get(role) ?? [])
-        .filter((note) => note.start >= firstNote - 1e-6)
+      notes: trackNotes[i]
+        .filter((note) => warp(note.start) >= firstNote - 1e-6)
         .slice(0, MAX_PART_NOTES)
         .flatMap((note) => [
-          round(note.start - firstNote),
-          round(note.length),
+          round(warp(note.start) - firstNote),
+          round(warp(note.start + note.length) - warp(note.start)),
           note.midi,
           note.velocity,
         ]),
@@ -457,10 +606,6 @@ export function songFromSongsterr(
 
   const firstSignature = main.measures.find((m) => m.signature)?.signature ?? [4, 4];
   const beatsPerBar = (firstSignature[0] * 4) / firstSignature[1];
-  const tempo = mainTempo(
-    tracks.find(({ track }) => track.automations?.tempo?.length)?.track.automations?.tempo ?? [],
-    lengths
-  );
 
   return {
     title: [song.title, song.artist].filter(Boolean).join(' by ') || 'Songsterr song',
@@ -473,5 +618,6 @@ export function songFromSongsterr(
     ...(sections.length ? { sections } : {}),
     ...(firstChord - firstNote > 1e-6 ? { leadIn: round(firstChord - firstNote) } : {}),
     ...(parts.length ? { parts } : {}),
+    ...(!useWritten ? { chordsGuessed: true } : {}),
   };
 }

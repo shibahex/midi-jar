@@ -150,7 +150,11 @@ const ChordQuizSettings: React.FC = () => {
 
           {progressionsMode && (
             <>
-              <FormField label="Progressions" hint="Choose which progressions can be asked">
+              <FormField
+                as="div"
+                label="Progressions"
+                hint="Choose which progressions can be asked"
+              >
                 <ToggleList
                   items={PROGRESSIONS.map((p) => ({
                     id: p.id,

@@ -38,7 +38,17 @@ export const INSTRUMENTS: { value: InstrumentName; label: string }[] = [
 ];
 
 /** The parts heard, each with its own volume */
-export type Channel = 'chords' | 'rhythm' | 'bass' | 'lead' | 'melody' | 'click' | 'keyboard';
+type MainChannel =
+  | 'chords'
+  | 'rhythm'
+  | 'bass'
+  | 'lead'
+  | 'melody'
+  | 'click'
+  | 'countIn'
+  | 'keyboard';
+/** a part of the song, the click, the keyboard, or another instrument of the song (by name) */
+export type Channel = MainChannel | `other:${string}`;
 
 export type SoundStyle = 'classical' | 'electric';
 
@@ -256,8 +266,14 @@ const PLUCKS: Record<PluckedName, Pluck> = {
 
 const isPlucked = (name: InstrumentName): name is PluckedName => name in PLUCKS;
 
+/** The other instruments of a song, for each style (until one is picked) */
+const OTHER_INSTRUMENTS: Record<SoundStyle, InstrumentName> = {
+  classical: 'acousticGuitar',
+  electric: 'electricGuitar',
+};
+
 /** The instrument of each part, for each style (until one is picked) */
-const STYLE_INSTRUMENTS: Record<SoundStyle, Record<Channel, InstrumentName>> = {
+const STYLE_INSTRUMENTS: Record<SoundStyle, Record<MainChannel, InstrumentName>> = {
   classical: {
     chords: 'piano',
     rhythm: 'piano',
@@ -265,6 +281,7 @@ const STYLE_INSTRUMENTS: Record<SoundStyle, Record<Channel, InstrumentName>> = {
     lead: 'strings',
     melody: 'flute',
     click: 'piano',
+    countIn: 'piano',
     keyboard: 'piano',
   },
   electric: {
@@ -274,6 +291,7 @@ const STYLE_INSTRUMENTS: Record<SoundStyle, Record<Channel, InstrumentName>> = {
     lead: 'synthLead',
     melody: 'voice',
     click: 'piano',
+    countIn: 'piano',
     keyboard: 'epiano',
   },
 };
@@ -353,6 +371,9 @@ class Synth {
 
   private channelVolumes = new Map<Channel, number>();
 
+  /** the song is silent (its parts, chords and click), the keyboard is still heard */
+  private songMuted = false;
+
   /** instruments picked for the parts (the style chooses the others) */
   private channelInstruments = new Map<Channel, InstrumentName>();
 
@@ -398,7 +419,7 @@ class Synth {
     let gain = this.channels.get(name);
     if (!gain) {
       gain = context.createGain();
-      gain.gain.value = this.channelVolumes.get(name) ?? 1;
+      gain.gain.value = this.channelGain(name);
       gain.connect(master);
       this.channels.set(name, gain);
     }
@@ -422,12 +443,29 @@ class Synth {
     const value = Math.max(0, Math.min(1, volume));
     this.channelVolumes.set(name, value);
     const gain = this.channels.get(name);
-    if (gain) gain.gain.value = value;
+    if (gain) gain.gain.value = this.channelGain(name);
+  }
+
+  private channelGain(name: Channel) {
+    if (this.songMuted && name !== 'keyboard') return 0;
+    return this.channelVolumes.get(name) ?? 1;
+  }
+
+  /** Silences the song (not the keyboard): to listen to the real song instead */
+  setSongMuted(muted: boolean) {
+    this.songMuted = muted;
+    this.channels.forEach((gain, name) => {
+      gain.gain.value = this.channelGain(name);
+    });
   }
 
   /** The instrument of a part: picked, or the style's */
   instrumentOf(channel: Channel): InstrumentName {
-    return this.channelInstruments.get(channel) ?? STYLE_INSTRUMENTS[this.style][channel];
+    const picked = this.channelInstruments.get(channel);
+    if (picked) return picked;
+    // another instrument of the song: a guitar (easy to hear among the others)
+    if (channel.startsWith('other:')) return OTHER_INSTRUMENTS[this.style];
+    return STYLE_INSTRUMENTS[this.style][channel as MainChannel];
   }
 
   /** Picks the instrument of a part (none: the style's) */
@@ -647,7 +685,7 @@ class Synth {
   }
 
   /** A click for the beat (higher on the first beat of a bar) */
-  click(accent = false) {
+  click(accent = false, channel: Channel = 'click') {
     const { context } = this.output();
     const now = context.currentTime;
     const oscillator = context.createOscillator();
@@ -657,7 +695,7 @@ class Synth {
     gain.gain.setValueAtTime(accent ? 0.12 : 0.07, now);
     gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.05);
     oscillator.connect(gain);
-    gain.connect(this.channel('click'));
+    gain.connect(this.channel(channel));
     oscillator.start(now);
     oscillator.stop(now + 0.06);
   }

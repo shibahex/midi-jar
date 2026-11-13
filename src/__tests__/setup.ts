@@ -24,6 +24,14 @@ window.app = {
     redirectUri: jest.fn(),
     volume: jest.fn(),
     bars: jest.fn(),
+    players: jest.fn(),
+    select: jest.fn(),
+  },
+  youtube: {
+    search: jest.fn(),
+    video: jest.fn(),
+    extension: jest.fn(),
+    openExtension: jest.fn(),
   },
   settings: {
     clear: jest.fn(),

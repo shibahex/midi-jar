@@ -4,9 +4,9 @@ import { Chord as TChord } from '@tonaljs/chord';
 import { RhythmGameSettings, SongPart, SongPartRole } from 'main/types';
 import { getChordVoicing } from 'renderer/helpers';
 
-/** Timing windows around a hit, in milliseconds */
-export const PERFECT_MS = 90;
-export const GOOD_MS = 200;
+/** Timing windows around a hit, in milliseconds (a little forgiving) */
+export const PERFECT_MS = 110;
+export const GOOD_MS = 250;
 
 /** beats in a bar, when a song does not tell */
 export const BEATS_PER_BAR = 4;
@@ -29,7 +29,12 @@ export type Hit = {
   /** a note (or notes) of a part of the song to play, instead of a chord (MIDI numbers) */
   notes?: number[];
   result?: HitResult;
+  /** passed by a jump ahead (joined in the middle, Spotify moved on): neither played nor missed */
+  skipped?: boolean;
 };
+
+/** A hit still to play (not judged, not skipped) */
+export const isOpen = (hit: Hit) => !hit.result && !hit.skipped;
 
 /** A chord of a song, lasting a number of beats (a bar if not told) */
 export type RhythmChord = { name: string; numeral: string; chord: TChord; beats?: number };
@@ -73,12 +78,20 @@ export function buildHits(
   let position = beatsPerBar + (rhythm.leadIn ?? 0);
   const hits: Omit<Hit, 'id' | 'length'>[] = [];
   const starts: number[] = [];
+  // where each hit's chord ends (no chord after it: nothing to hold)
+  const ends: number[] = [];
   chords.forEach(({ name, numeral, chord, beats = beatsPerBar }) => {
+    // no chord played there ("N.C."): nothing to play
+    if (!chord.tonic) {
+      position += beats;
+      return;
+    }
     // the notes of a playable voicing: big chords can leave out the 5th, the 11th...
-    const root = Note.chroma(chord.tonic ?? 'C') ?? 0;
+    const root = Note.chroma(chord.tonic) ?? 0;
     const chromas = getChordVoicing(chord.intervals).map((semitones) => (root + semitones) % 12);
     for (let offset = 0; offset < beats; offset += step) {
       starts.push(position + offset);
+      ends.push(position + beats);
       hits.push({
         time: (position + offset) * beatMs,
         chordStart: offset === 0,
@@ -94,7 +107,7 @@ export function buildHits(
   return hits.map((hit, id) => ({
     ...hit,
     id,
-    length: (starts[id + 1] ?? position) - starts[id],
+    length: Math.min(starts[id + 1] ?? position, ends[id]) - starts[id],
   }));
 }
 
@@ -124,6 +137,8 @@ export type Section = { name: string; start: number };
 
 /** Bars in a section of a song that has no sections of its own */
 const BARS_PER_SECTION = 4;
+/** Songs without named parts are cut in about this many parts */
+const SECTIONS_PER_SONG = 10;
 
 /**
  * Sections of a song: its own (verse, chorus...), or every 4 bars ("Bars 1-4")
@@ -136,16 +151,21 @@ export function getSections(
   const own = sections.filter((s) => s.start >= 0 && s.start < chords.length);
   if (own.length) return own[0].start === 0 ? own : [{ name: 'Start', start: 0 }, ...own];
 
+  // about SECTIONS_PER_SONG parts, of a multiple of BARS_PER_SECTION bars
+  const totalBars =
+    chords.reduce((sum, chord) => sum + (chord.beats ?? beatsPerBar), 0) / beatsPerBar;
+  const barsPerSection =
+    BARS_PER_SECTION * Math.max(1, Math.round(totalBars / SECTIONS_PER_SONG / BARS_PER_SECTION));
   const result: Section[] = [];
   let position = 0;
   let lastGroup = -1;
   chords.forEach((chord, index) => {
     const bar = Math.floor(position / beatsPerBar + 1e-6);
-    const group = Math.floor(bar / BARS_PER_SECTION);
+    const group = Math.floor(bar / barsPerSection);
     if (group > lastGroup) {
       lastGroup = group;
-      const first = group * BARS_PER_SECTION + 1;
-      result.push({ name: `Bars ${first}-${first + BARS_PER_SECTION - 1}`, start: index });
+      const first = group * barsPerSection + 1;
+      result.push({ name: `Bars ${first}-${first + barsPerSection - 1}`, start: index });
     }
     position += chord.beats ?? beatsPerBar;
   });
@@ -160,12 +180,21 @@ export function getSectionChords<T>(chords: T[], sections: Section[], first: num
 }
 
 /** A note of a song part to play, in milliseconds from the start of the game */
+/**
+ * A part of a song, to pick it (to hear or to play): the main parts by their role, the other
+ * instruments by their name
+ */
+export const partKey = (part: { role: SongPartRole; name: string }) =>
+  part.role === 'other' ? `other:${part.name}` : part.role;
+
 export type PartEvent = {
   time: number;
   duration: number;
   midi: number;
   velocity: number;
   role: SongPartRole;
+  /** the part it is of (its key: the sound channel playing it) */
+  part: string;
 };
 
 /**
@@ -174,7 +203,7 @@ export type PartEvent = {
  */
 export function buildPartEvents(
   parts: SongPart[],
-  roles: SongPartRole[],
+  keys: string[],
   tempo: number,
   beatsPerBar: number,
   // a part of the song only: from and to a beat (from the song start)
@@ -183,7 +212,7 @@ export function buildPartEvents(
 ): PartEvent[] {
   const beatMs = getBeatMs(tempo);
   return parts
-    .filter((part) => roles.includes(part.role))
+    .filter((part) => keys.includes(partKey(part)))
     .flatMap((part) =>
       Array.from({ length: Math.floor(part.notes.length / 4) }, (_, i) => {
         const [start, length, midi, velocity] = part.notes.slice(i * 4, i * 4 + 4);
@@ -193,12 +222,20 @@ export function buildPartEvents(
           midi,
           velocity,
           role: part.role,
+          part: partKey(part),
           start,
         };
       })
     )
     .filter((event) => event.start >= fromBeat - 1e-6 && event.start < toBeat - 1e-6)
-    .map(({ time, duration, midi, velocity, role }) => ({ time, duration, midi, velocity, role }))
+    .map(({ time, duration, midi, velocity, role, part }) => ({
+      time,
+      duration,
+      midi,
+      velocity,
+      role,
+      part,
+    }))
     .sort((a, b) => a.time - b.time);
 }
 

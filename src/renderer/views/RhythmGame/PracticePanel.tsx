@@ -28,6 +28,12 @@ type Props = {
   onLoopChange: (loop: boolean) => void;
   ramp: boolean;
   onRampChange: (ramp: boolean) => void;
+  /** the bars of the sections picked (from 0), and the ones picked in them (null: all) */
+  barRange: { from: number; to: number };
+  bars: { from: number; to: number } | null;
+  onBarsChange: (bars: { from: number; to: number } | null) => void;
+  /** the speed cannot change (Spotify plays at the real speed) */
+  speedLocked: boolean;
 };
 
 /**
@@ -47,11 +53,17 @@ const PracticePanel: React.FC<Props> = ({
   onLoopChange,
   ramp,
   onRampChange,
+  barRange,
+  bars,
+  onBarsChange,
+  speedLocked,
 }) => {
   // a click picks the first section, the next one the last section
   const [picking, setPicking] = useState<'first' | 'last'>('first');
+  const [pickingBar, setPickingBar] = useState<'first' | 'last'>('first');
 
   const pick = (index: number) => {
+    setPickingBar('first');
     if (picking === 'first') {
       onRangeChange(index, index);
       setPicking('last');
@@ -61,7 +73,24 @@ const PracticePanel: React.FC<Props> = ({
     }
   };
 
-  const bars = sections.slice(first, last + 1).reduce((sum, s) => sum + s.bars, 0);
+  // bars: a click picks one bar, the next one the last bar
+  const pickBar = (bar: number) => {
+    if (pickingBar === 'first' || !bars) {
+      onBarsChange({ from: bar, to: bar });
+      setPickingBar('last');
+    } else {
+      onBarsChange({ from: Math.min(bars.from, bar), to: Math.max(bars.from, bar) });
+      setPickingBar('first');
+    }
+  };
+  const barNumbers = Array.from(
+    { length: Math.max(0, Math.min(200, barRange.to - barRange.from + 1)) },
+    (_, i) => barRange.from + i
+  );
+
+  const barCount = bars
+    ? bars.to - bars.from + 1
+    : sections.slice(first, last + 1).reduce((sum, s) => sum + s.bars, 0);
   const setSpeed = (value: number) =>
     onSpeedChange(Math.min(MAX_SPEED, Math.max(MIN_SPEED, value)));
 
@@ -138,12 +167,49 @@ const PracticePanel: React.FC<Props> = ({
             >
               Select all ({sections.reduce((sum, s) => sum + s.bars, 0)} bars)
             </button>
+
+            <div className={cx('heading')}>
+              <span>Bars</span>
+              <span className={cx('hint')}>
+                {pickingBar === 'first' || !bars
+                  ? 'Click a bar to play just it'
+                  : 'Then the last bar (or play this one)'}
+              </span>
+            </div>
+            <div className={cx('barGrid')}>
+              {barNumbers.map((bar) => (
+                <button
+                  key={bar}
+                  type="button"
+                  className={cx('bar', {
+                    'bar--in': !!bars && bar >= bars.from && bar <= bars.to,
+                  })}
+                  onClick={() => pickBar(bar)}
+                >
+                  {bar + 1}
+                </button>
+              ))}
+            </div>
+            {bars && (
+              <button
+                type="button"
+                className={cx('all')}
+                onClick={() => {
+                  onBarsChange(null);
+                  setPickingBar('first');
+                }}
+              >
+                All bars of the sections
+              </button>
+            )}
           </div>
 
           <div className={cx('column', 'column--side')}>
             <div className={cx('heading')}>
               <span>Speed</span>
-              <span className={cx('hint')}>{bars} bars selected</span>
+              <span className={cx('hint')}>
+                {barCount} bar{barCount === 1 ? '' : 's'} selected
+              </span>
             </div>
             <div className={cx('speed')}>
               <button
@@ -151,7 +217,7 @@ const PracticePanel: React.FC<Props> = ({
                 className={cx('step')}
                 aria-label="Slower"
                 onClick={() => setSpeed(speed - 5)}
-                disabled={speed <= MIN_SPEED}
+                disabled={speedLocked || speed <= MIN_SPEED}
               >
                 <Icon name="minus" />
               </button>
@@ -164,11 +230,14 @@ const PracticePanel: React.FC<Props> = ({
                 className={cx('step')}
                 aria-label="Faster"
                 onClick={() => setSpeed(speed + 5)}
-                disabled={speed >= MAX_SPEED}
+                disabled={speedLocked || speed >= MAX_SPEED}
               >
                 <Icon name="plus" />
               </button>
             </div>
+            {speedLocked && (
+              <span className={cx('hint')}>With Spotify the song plays at its real speed</span>
+            )}
             <div className={cx('presets')}>
               {PRESETS.map((preset) => (
                 <button
@@ -176,6 +245,7 @@ const PracticePanel: React.FC<Props> = ({
                   type="button"
                   className={cx('preset', { 'preset--active': preset === speed })}
                   onClick={() => setSpeed(preset)}
+                  disabled={speedLocked}
                 >
                   {preset}%
                 </button>
