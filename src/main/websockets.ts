@@ -12,6 +12,7 @@ const WS_NAMESPACES = [
   'chord-quiz',
   'scale-quiz',
   'scale-degrees',
+  'rhythm-game',
   'circle-of-fifths',
   'chord-dictionary',
 ];

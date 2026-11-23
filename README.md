@@ -44,8 +44,10 @@ MIDI Jar includes:
 - A Circle of Fifths highly customizatble
 - A Chord Quiz module, with different modes and settings to train
 - A Scale Quiz module, to learn scales with a keyboard and fingering
-- A Learning Mode for both quizzes, showing the keys to play and the fingering
+- A Rhythm Game, to play the chords of songs in time (built-in songs, or imported from chord sheets and Ultimate Guitar)
+- A Learning Mode for the quizzes and the Rhythm Game, showing the keys to play and the fingering
 - A HTTP/Websocket server to include modules externally (in OBS Browser source for instance)
+- A built-in sound: hear the notes of your MIDI keyboard (`Play My Notes` in the general settings, with the sustain pedal) and the songs of the Rhythm Game
 - Running at startup
 - Running in background (no window, only Tray icon)
 
@@ -328,7 +330,7 @@ You can choose which mode (algorithm) to play with:
 You can also choose which chords are asked:
 
 - `Chords`: Major & minor triads only, Triads (maj, min, dim, aug, sus2, sus4), 7th chords (maj7, m7, 7, m7b5, dim7, mMaj7), 9th chords (maj9, m9, 9, 7b9, 7#9, add9), Triads & 7th chords, or All chords
-- `Keys`: all keys, or natural keys only (no sharp or flat root), in `random` mode
+- `Keys`: all keys, natural keys only (no sharp or flat root), or sharps and flats only, in `random` mode
 
 In the settings, click a chord of the list to leave it out (or ask it again): for instance `Triads` with only `maj` and natural keys asks the major triads C, D, E, F, G, A and B.
 
@@ -358,6 +360,25 @@ Hopefully in the future, this module will be able to have an "Intelligent" mode 
 [MIDI Jar - Chord Quiz example](https://user-images.githubusercontent.com/1231011/233844786-4f182b44-fcb8-4d24-b69d-532c6286f61e.mp4)
 
 
+## Rhythm Game
+
+Play along a song: its chords scroll toward a hit line in time with the beat (after a count-in). Play each one as it reaches the line for a Perfect, a Good or a Miss, with combos. The built-in songs are Pachelbel's Canon, House of the Rising Sun, Greensleeves, When the Saints Go Marching In, Amazing Grace and a 12-bar blues, in a random key or the current key.
+
+- `Pattern`: chords follow the song's own rhythm (how long each chord lasts, its time signature like the 3/4 of Amazing Grace, the strumming of Ultimate Guitar songs), or a fixed pattern: once per bar, twice, or on every beat (release the keys between repeated chords)
+- `Tempo`: beats per minute, or `Song's Tempo` to play imported songs at their own tempo. With `Speed Up`, the song gets 5% faster every 4 chords in a row, up to 1.5 times the tempo
+- `Song Name`: shown from the start, or kept a mystery until the end
+- `Sound`: the built-in sound plays the chords as they reach the line, a click on the beat, both, or nothing. `Listen` plays the whole song by itself before you play it
+- `Spotify`: play imported songs on Spotify in time with the game. Create an app on developer.spotify.com/dashboard (Web API), add the Redirect URI shown in the settings (`http://127.0.0.1:43821/callback`), paste its Client ID and connect. Link a song (`Find on Spotify` in the list of imported songs), and it is synced on its own: where the first chord is in the recording is estimated from the lengths of the recording and of the song (snapped to Spotify's bars when Spotify still gives them), then corrected after each game from how early or late you played. You can also sync by tapping on the first chord, or fine-tune by 50 ms in the settings. Start plays the song on Spotify and the game follows its position; Stop pauses it. Synced songs play at their own tempo (no slow down or wait on a miss). Starting playback needs Spotify Premium; without it, press play in Spotify and the game follows
+- `Sync By Listening` (on by default): while a song plays on Spotify, the game listens to it and moves the sync to where what it hears matches the chords and notes of the song (it searches near the current sync, the game's own sound is off for a few seconds meanwhile). `Listen To`: the sound of the computer (Linux, recorded with `pw-record` or `parec`) or a sound input like a microphone. `Sync by listening` on the start screen plays the song on Spotify and syncs it, searching further
+- `You Play`: the chords, or the notes of a part of a Songsterr song (lead guitar, melody or bass), like picking an instrument in a guitar game. Notes are played one key at a time (any octave, legato is fine), and heard when that part is not
+- Volume bars: a volume for the chords, each part of the song, the click, your keyboard (`You`, with Play My Notes) and Spotify, on the start screen, open while listening, and behind `Volume` while playing. Pick the instrument of each part under its bar: piano, electric piano, organ, acoustic guitar, electric guitar, bass guitar (plucked strings), cello, synth bass, strings, synth lead, flute or voice; and your keyboard's instrument in the general settings (`My Instrument`). Guitars strum the chords
+- `Latency` arrows: how late your playing reaches the game (MIDI, audio or bluetooth delay), taken off when judging. For a song synced with Spotify they move the sync instead (20 ms), live while playing, saved when it stops. While listening to a Spotify song, tap Space or a key on each chord change: after 4 taps the sync follows them. The sound is classical by default (grand piano, cello, violins and flute in a concert hall reverb), or electric (`Sound Style` in the general settings)
+- `Song Parts`: Songsterr songs keep the notes of their rhythm guitar, bass, lead guitar and vocal melody, played note for note in their real rhythm by the built-in sound (the rhythm guitar replaces the plain chords). Mute or hear each part in the settings or on the game screen
+- `Learning Mode`: a keyboard with the keys and fingering of the next chord, and what happens on a miss: keep going, wait until the missed chord is played, or slow the song down (it speeds back up after 4 hits in a row)
+- `Import Songs`: from ChordPro files (`.cho`, `.chordpro`, `.chopro`, `.pro`, `.crd`, with `[Am]` chords and `{title:}` / `{key:}` / `{tempo:}` / `{time:}`), chord sheets (`.txt`, lines of chords above the lyrics, Ultimate Guitar `[ch]` tags, bar lines like `| C G | Am | % |` for how long chords last), or the web address of a song (or just a song name, found on Songsterr): a Songsterr song (the chords are found from the notes of its rhythm guitar and bass, with the real tempo, time signature, timing and sections), an Ultimate Guitar chords page with its tempo and strumming, or another chord site. Songs are played in their own key with their numerals, a bar per chord unless bar lines tell otherwise. Importing a song again replaces it. Type a song's tempo in the list if it has none (Ultimate Guitar only gives one with a strumming pattern)
+- `Song`: play one song (also picked on the game screen), or random songs among the ones left in
+- Big chords (9ths, 11ths, 13ths) are shown in a voicing one hand can play: the 5th, then the 11th are left out, and the notes are packed within an octave. Only those notes are needed for a hit
+
 ## Scale Quiz
 
 https://github.com/user-attachments/assets/79e10d36-a1fd-4e74-b41e-3aac776a5d1a
@@ -366,11 +387,17 @@ You can learn scales by using the Scale Quiz module.
 
 A scale is asked, and you must play its notes one at a time, in any octave. Each right note scores points, a wrong note loses some, and playing the whole scale without a mistake gives a bonus that grows with your streak of perfect scales.
 
+You can also practice **melodies** instead of scales (`Practice: Melodies`): the notes of a song are shown in order with their degrees, in any key (random, in order, or the current key). The songs are in the public domain: Ode to Joy, Twinkle Twinkle Little Star, Mary Had a Little Lamb, Frère Jacques, Amazing Grace and When the Saints Go Marching In, and you can leave some out.
+
+To **solo over a backing track** (from YouTube for instance), choose `Practice: Solo phrases`, then the key and scale of the track (minor or major pentatonic, blues, major, natural minor, dorian, mixolydian, harmonic minor) and the length of the phrases. Random phrases of that scale are given one after the other, moving mostly by step and ending on the tonic or the fifth; with `Learning Mode`, the keyboard shows every key of the scale and the next note to play.
+
+With `Learning Mode`, melodies and solo phrases also show a recommended finger for each note (in the note boxes, and on the next key of the keyboard), chosen to keep the hand in position, cross the thumb only when needed and avoid the thumb on black keys.
+
 You can choose which scales are asked:
 
 - `Scales`: Major, Natural Minor, both, the Modes (Ionian to Locrian), the Minor scales (natural, harmonic, melodic), Pentatonics & Blues, or all of them
 - `Tonic`: `random`, `in order` (going up from C to B through every key), or the tonic of the current key signature (in Notation settings)
-- `Keys`: all keys, or natural keys only (no sharp or flat tonic)
+- `Keys`: all keys, natural keys only (no sharp or flat tonic), or sharps and flats only
 - `Direction`: ascending, descending, or up and back down
 
 And how you practice them:

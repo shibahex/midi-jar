@@ -5,6 +5,8 @@ import {
   CircleOfFifthsSettings,
   KeyboardSettings,
   NotationSettings,
+  RhythmGameSettings,
+  SongPartRole,
   ScaleDegreesSettings,
   ScaleQuizSettings,
 } from 'main/types';
@@ -74,6 +76,11 @@ export const defaultChordQuizSettings: ChordQuizSettings = {
 };
 
 export const defaultScaleQuizSettings: ScaleQuizSettings = {
+  practice: 'scales' as const,
+  soloKey: '9',
+  soloScale: 'minor pentatonic',
+  soloLength: 'medium' as const,
+  excludedMelodies: [],
   mode: 'random' as const,
   tonics: 'all' as const,
   scales: 'majorMinor' as const,
@@ -87,6 +94,33 @@ export const defaultScaleQuizSettings: ScaleQuizSettings = {
   displayNoteNames: false,
   displayFormula: true,
   displayRelative: false,
+};
+
+export const defaultRhythmGameSettings: RhythmGameSettings = {
+  tempo: 80,
+  pattern: 'song' as const,
+  songTempo: false,
+  excludedSongs: [],
+  song: '',
+  customSongs: [],
+  showTitle: 'start' as const,
+  speedUp: false,
+  songKey: 'random' as const,
+  tonics: 'all' as const,
+  learningMode: false,
+  fingering: 'right' as const,
+  onMiss: 'continue' as const,
+  gamification: true,
+  sound: 'chords' as const,
+  songParts: ['rhythm', 'bass', 'lead', 'melody'] as SongPartRole[],
+  volumes: { chords: 80, rhythm: 70, bass: 75, lead: 65, melody: 80, click: 60 },
+  instruments: {},
+  latencyMs: 0,
+  spotifyClientId: '',
+  spotifySync: false,
+  listenSync: true,
+  syncInput: '',
+  playPart: 'chords' as const,
 };
 
 export const defaultScaleDegreesSettings: ScaleDegreesSettings = {
@@ -153,11 +187,16 @@ export const defaults: StoreType = {
     general: {
       launchAtStartup: false,
       startMinimized: false,
+      playNotes: false,
+      soundVolume: 70,
+      soundStyle: 'classical' as const,
+      keyboardInstrument: '',
     },
     chordDisplay: [defaultChordDisplaySettings],
     chordQuiz: defaultChordQuizSettings,
     scaleQuiz: defaultScaleQuizSettings,
     scaleDegrees: defaultScaleDegreesSettings,
+    rhythmGame: defaultRhythmGameSettings,
     circleOfFifths: defaultCircleOfFifthsSettings,
     chordDictionary: defaultChordDictionarySettings,
     notation: defaultNotationSettings,

@@ -18,6 +18,7 @@ import ThumbnaildCircleOfFifths from 'renderer/assets/thumbnails/circle-of-fifth
 import ThumbnaildChordDictionary from 'renderer/assets/thumbnails/chord-dictionary.jpg';
 import ThumbnailScaleQuiz from 'renderer/assets/thumbnails/scale-quiz.jpg';
 import ThumbnailScaleDegrees from 'renderer/assets/thumbnails/scale-degrees.jpg';
+import ThumbnailRhythmGame from 'renderer/assets/thumbnails/rhythm-game.jpg';
 import { useSettings } from 'renderer/contexts/Settings';
 
 const Home: React.FC = () => {
@@ -58,6 +59,12 @@ const Home: React.FC = () => {
             <CardThumbnailOverlay as={NavLink} to="/scale-degrees" interactive />
           </CardThumbnail>
           <CardHeader left={<Icon name="quiz" />}>Scale Degrees</CardHeader>
+        </Card>
+        <Card outlined elevation={1}>
+          <CardThumbnail alt="Rhythm Game preview" src={ThumbnailRhythmGame}>
+            <CardThumbnailOverlay as={NavLink} to="/rhythm-game" interactive />
+          </CardThumbnail>
+          <CardHeader left={<Icon name="music" />}>Rhythm Game</CardHeader>
         </Card>
         <Card outlined elevation={1}>
           <CardThumbnail alt="Circle of Fifths preview" src={ThumbnaildCircleOfFifths}>

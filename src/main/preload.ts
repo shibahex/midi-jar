@@ -1,6 +1,14 @@
 import { contextBridge, ipcRenderer, IpcRendererEvent } from 'electron';
 
-import { MidiMessage, ServerState, Settings, UpdateInfo } from './types';
+import {
+  MidiMessage,
+  ServerState,
+  Settings,
+  SpotifyPlayer,
+  SpotifyStatus,
+  SpotifyTrack,
+  UpdateInfo,
+} from './types';
 
 import { ApiMidiInput, ApiMidiOutput, ApiMidiRoute, ApiMidiWire } from './types/api';
 import { WindowState } from './types/WindowState';
@@ -18,6 +26,29 @@ const registerListener =
 
 export const AppApi = {
   quit: () => ipcRenderer.send('app:quit'),
+  fetchPage: (url: string): Promise<string> => ipcRenderer.invoke('app:fetchPage', url),
+  /** the sound played by the computer: chunks of samples, and when the last one was heard */
+  sound: {
+    start: (): Promise<string> => ipcRenderer.invoke('app:sound:start'),
+    stop: (): Promise<void> => ipcRenderer.invoke('app:sound:stop'),
+    onData: (callback: (samples: Float32Array, at: number) => void) =>
+      registerListener('app:sound:data')(callback),
+  },
+  spotify: {
+    login: (clientId: string): Promise<void> => ipcRenderer.invoke('spotify:login', clientId),
+    logout: (): Promise<void> => ipcRenderer.invoke('spotify:logout'),
+    status: (): Promise<SpotifyStatus> => ipcRenderer.invoke('spotify:status'),
+    player: (): Promise<SpotifyPlayer | null> => ipcRenderer.invoke('spotify:player'),
+    play: (uri: string, positionMs: number): Promise<void> =>
+      ipcRenderer.invoke('spotify:play', uri, positionMs),
+    pause: (): Promise<void> => ipcRenderer.invoke('spotify:pause'),
+    seek: (positionMs: number): Promise<void> => ipcRenderer.invoke('spotify:seek', positionMs),
+    search: (query: string): Promise<SpotifyTrack | null> =>
+      ipcRenderer.invoke('spotify:search', query),
+    redirectUri: (): Promise<string> => ipcRenderer.invoke('spotify:redirectUri'),
+    volume: (percent: number): Promise<void> => ipcRenderer.invoke('spotify:volume', percent),
+    bars: (uri: string): Promise<number[] | null> => ipcRenderer.invoke('spotify:bars', uri),
+  },
   settings: {
     clear: () => ipcRenderer.send('app:settings:clear'),
     reset: (key: keyof Settings) => ipcRenderer.invoke('app:settings:reset', key),

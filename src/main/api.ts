@@ -24,6 +24,8 @@ import {
 } from './windowState';
 import { WindowState } from './types/WindowState';
 import { checkUpdates } from './update';
+import * as spotify from './spotify';
+import { startCapture, stopCapture } from './soundCapture';
 
 function sendToAll(channel: string, ...args: unknown[]) {
   const windows = BrowserWindow.getAllWindows();
@@ -228,3 +230,87 @@ ipcMain.handle('app:server:enable', async (_event, enabled: boolean) => {
 ipcMain.on('app:server:getState', (event) => {
   event.reply('app:server:state', getServerState());
 });
+
+/* WEB PAGES */
+
+const PAGE_USER_AGENT =
+  'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36';
+const MAX_PAGE_SIZE = 10 * 1024 * 1024;
+
+/** Fetches a web page (a song's chords), from the main process to avoid cross-site limits */
+ipcMain.handle('app:fetchPage', async (_event, url: string) => {
+  const { protocol } = new URL(url);
+  if (protocol !== 'https:' && protocol !== 'http:') throw new Error('Not a web address');
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 15000);
+  try {
+    const response = await fetch(url, {
+      // like a browser (some sites refuse requests without a language)
+      headers: {
+        'User-Agent': PAGE_USER_AGENT,
+        Accept: '*/*',
+        'Accept-Language': 'en-US,en;q=0.9',
+      },
+      signal: controller.signal,
+    });
+    if (!response.ok) throw new Error(`The page could not be loaded (error ${response.status})`);
+    const text = await response.text();
+    return text.slice(0, MAX_PAGE_SIZE);
+  } finally {
+    clearTimeout(timeout);
+  }
+});
+
+/* SPOTIFY */
+
+/** errors of the main process reach the renderer as plain messages */
+const spotifyCall =
+  <A extends unknown[], R>(call: (...args: A) => Promise<R>) =>
+  (_event: unknown, ...args: A) =>
+    call(...args);
+
+ipcMain.handle(
+  'spotify:login',
+  spotifyCall((clientId: string) => spotify.login(clientId))
+);
+ipcMain.handle('spotify:logout', () => spotify.logout());
+ipcMain.handle(
+  'spotify:status',
+  spotifyCall(() => spotify.getStatus())
+);
+ipcMain.handle(
+  'spotify:player',
+  spotifyCall(() => spotify.getPlayer())
+);
+ipcMain.handle(
+  'spotify:play',
+  spotifyCall((uri: string, ms: number) => spotify.play(uri, ms))
+);
+ipcMain.handle(
+  'spotify:pause',
+  spotifyCall(() => spotify.pause())
+);
+ipcMain.handle(
+  'spotify:seek',
+  spotifyCall((ms: number) => spotify.seek(ms))
+);
+ipcMain.handle(
+  'spotify:search',
+  spotifyCall((query: string) => spotify.search(query))
+);
+ipcMain.handle('spotify:redirectUri', () => spotify.SPOTIFY_REDIRECT_URI);
+
+/* SOUND OF THE COMPUTER (to sync by listening) */
+
+ipcMain.handle('app:sound:start', (event) => startCapture(event.sender));
+ipcMain.handle('app:sound:stop', () => stopCapture());
+app.on('will-quit', () => stopCapture());
+ipcMain.handle(
+  'spotify:volume',
+  spotifyCall((percent: number) => spotify.setVolume(percent))
+);
+ipcMain.handle(
+  'spotify:bars',
+  spotifyCall((uri: string) => spotify.getBars(uri))
+);

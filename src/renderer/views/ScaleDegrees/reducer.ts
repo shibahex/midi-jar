@@ -53,7 +53,7 @@ function newScale(options: ScaleDegreesSettings, key: string, previous: ScaleInf
     options.scales,
     options.mode === 'randomInKey' ? key : null,
     previous,
-    options.tonics === 'natural'
+    options.tonics
   );
   return {
     scale,

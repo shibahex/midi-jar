@@ -301,10 +301,12 @@
                     "type": "boolean"
                 },
                 "mode": {
+                    "description": "\"rhythm\" is from before the Rhythm Game had its own module (read as \"random\")",
                     "enum": [
                         "progressions",
                         "random",
-                        "randomInKey"
+                        "randomInKey",
+                        "rhythm"
                     ],
                     "type": "string"
                 },
@@ -321,10 +323,11 @@
                     "type": "boolean"
                 },
                 "tonics": {
-                    "description": "Tonics asked in quizzes: every key, or natural keys only (no sharp or flat)",
+                    "description": "Tonics asked in quizzes: every key, natural keys only (no sharp or flat), or sharp/flat keys only",
                     "enum": [
                         "all",
-                        "natural"
+                        "natural",
+                        "accidentals"
                     ],
                     "type": "string"
                 }
@@ -382,8 +385,28 @@
         },
         "general": {
             "properties": {
+                "keyboardInstrument": {
+                    "description": "built-in sound: the instrument heard when playing the keyboard (\"\" : the style's)",
+                    "type": "string"
+                },
                 "launchAtStartup": {
                     "type": "boolean"
+                },
+                "playNotes": {
+                    "description": "built-in sound: the notes played on the MIDI keyboard are heard",
+                    "type": "boolean"
+                },
+                "soundStyle": {
+                    "description": "built-in sound: classical (piano, strings, flute) or electric",
+                    "enum": [
+                        "classical",
+                        "electric"
+                    ],
+                    "type": "string"
+                },
+                "soundVolume": {
+                    "description": "built-in sound: volume from 0 to 100",
+                    "type": "number"
                 },
                 "startMinimized": {
                     "type": "boolean"
@@ -413,6 +436,319 @@
                 },
                 "staffTranspose": {
                     "type": "number"
+                }
+            },
+            "type": "object"
+        },
+        "rhythmGame": {
+            "properties": {
+                "customSongs": {
+                    "description": "songs imported from chord sheets or web pages (chords in their key)",
+                    "items": {
+                        "properties": {
+                            "beats": {
+                                "description": "length of each chord in beats (from bar lines), one bar each if not given",
+                                "items": {
+                                    "type": "number"
+                                },
+                                "type": "array"
+                            },
+                            "beatsPerBar": {
+                                "description": "beats in a bar (time signature: 3 for 3/4)",
+                                "type": "number"
+                            },
+                            "beatsPerHit": {
+                                "description": "the song's own rhythm: a chord is played every N beats (from the strumming)",
+                                "type": "number"
+                            },
+                            "bpm": {
+                                "description": "tempo of the song (beats per minute)",
+                                "type": "number"
+                            },
+                            "chords": {
+                                "description": "chord names in order, e.g. [\"G\", \"Em7\", \"C\", \"D\"]",
+                                "items": {
+                                    "type": "string"
+                                },
+                                "type": "array"
+                            },
+                            "id": {
+                                "type": "string"
+                            },
+                            "key": {
+                                "description": "key of the song, e.g. \"G\" or \"Em\" (from the file, or the first chord)",
+                                "type": "string"
+                            },
+                            "leadIn": {
+                                "description": "beats of intro before the first chord",
+                                "type": "number"
+                            },
+                            "parts": {
+                                "description": "notes of the instruments (rhythm guitar, bass, lead, melody), to hear the real song",
+                                "items": {
+                                    "description": "The notes of a part: flat [start, length, midi, velocity, ...] in beats from the song start",
+                                    "properties": {
+                                        "name": {
+                                            "type": "string"
+                                        },
+                                        "notes": {
+                                            "items": {
+                                                "type": "number"
+                                            },
+                                            "type": "array"
+                                        },
+                                        "role": {
+                                            "description": "Parts of a song played by the built-in sound (Songsterr songs)",
+                                            "enum": [
+                                                "bass",
+                                                "lead",
+                                                "melody",
+                                                "rhythm"
+                                            ],
+                                            "type": "string"
+                                        }
+                                    },
+                                    "type": "object"
+                                },
+                                "type": "array"
+                            },
+                            "sections": {
+                                "description": "parts of the song (verse, chorus...): their name and the index of their first chord",
+                                "items": {
+                                    "properties": {
+                                        "name": {
+                                            "type": "string"
+                                        },
+                                        "start": {
+                                            "type": "number"
+                                        }
+                                    },
+                                    "type": "object"
+                                },
+                                "type": "array"
+                            },
+                            "spotify": {
+                                "description": "the song on Spotify, and where its first chord is in the recording (ms, once synced)",
+                                "properties": {
+                                    "durationMs": {
+                                        "type": "number"
+                                    },
+                                    "firstChordMs": {
+                                        "type": "number"
+                                    },
+                                    "name": {
+                                        "type": "string"
+                                    },
+                                    "syncedBy": {
+                                        "description": "how the first chord was found: estimated, tapped, or corrected from the playing",
+                                        "enum": [
+                                            "estimate",
+                                            "listening",
+                                            "playing",
+                                            "tap"
+                                        ],
+                                        "type": "string"
+                                    },
+                                    "uri": {
+                                        "type": "string"
+                                    }
+                                },
+                                "type": "object"
+                            },
+                            "title": {
+                                "type": "string"
+                            },
+                            "url": {
+                                "description": "web address the song was imported from (to import it again)",
+                                "type": "string"
+                            }
+                        },
+                        "type": "object"
+                    },
+                    "type": "array"
+                },
+                "excludedSongs": {
+                    "description": "songs left out (ids)",
+                    "items": {
+                        "type": "string"
+                    },
+                    "type": "array"
+                },
+                "fingering": {
+                    "description": "Hands to display finger numbers for, in learning modes",
+                    "enum": [
+                        "both",
+                        "left",
+                        "none",
+                        "right"
+                    ],
+                    "type": "string"
+                },
+                "gamification": {
+                    "type": "boolean"
+                },
+                "instruments": {
+                    "description": "built-in sound: the instrument of each part (\"\" or missing: the sound style's)",
+                    "properties": {
+                        "bass": {
+                            "type": "string"
+                        },
+                        "chords": {
+                            "type": "string"
+                        },
+                        "lead": {
+                            "type": "string"
+                        },
+                        "melody": {
+                            "type": "string"
+                        },
+                        "rhythm": {
+                            "type": "string"
+                        }
+                    },
+                    "type": "object"
+                },
+                "latencyMs": {
+                    "description": "how late the playing reaches the game (ms): MIDI, audio, bluetooth... it is judged earlier",
+                    "type": "number"
+                },
+                "learningMode": {
+                    "type": "boolean"
+                },
+                "listenSync": {
+                    "description": "Spotify: the song is listened to (a sound input) to sync it",
+                    "type": "boolean"
+                },
+                "onMiss": {
+                    "description": "learning mode: on a miss, keep going, wait for the chord, or slow down",
+                    "enum": [
+                        "continue",
+                        "slowDown",
+                        "wait"
+                    ],
+                    "type": "string"
+                },
+                "pattern": {
+                    "description": "chords played in the rhythm of the song, once per bar, twice, or on every beat",
+                    "enum": [
+                        "bar",
+                        "beat",
+                        "half",
+                        "song"
+                    ],
+                    "type": "string"
+                },
+                "playPart": {
+                    "description": "what the player plays: the chords, or the notes of a part of the song",
+                    "enum": [
+                        "bass",
+                        "chords",
+                        "lead",
+                        "melody",
+                        "rhythm"
+                    ],
+                    "type": "string"
+                },
+                "showTitle": {
+                    "description": "the song name is shown from the start, or revealed at the end",
+                    "enum": [
+                        "end",
+                        "start"
+                    ],
+                    "type": "string"
+                },
+                "song": {
+                    "description": "the song to play (id), or \"\" for a random song",
+                    "type": "string"
+                },
+                "songKey": {
+                    "description": "key of the built-in songs: random, or the current key (notation settings)",
+                    "enum": [
+                        "current",
+                        "random"
+                    ],
+                    "type": "string"
+                },
+                "songParts": {
+                    "description": "built-in sound: the parts of Songsterr songs heard (the rhythm guitar replaces the chords)",
+                    "items": {
+                        "description": "Parts of a song played by the built-in sound (Songsterr songs)",
+                        "enum": [
+                            "bass",
+                            "lead",
+                            "melody",
+                            "rhythm"
+                        ],
+                        "type": "string"
+                    },
+                    "type": "array"
+                },
+                "songTempo": {
+                    "description": "songs with a tempo of their own (imported) are played at it",
+                    "type": "boolean"
+                },
+                "sound": {
+                    "description": "built-in sound: the chords of the song, a click on the beat, both, or nothing",
+                    "enum": [
+                        "both",
+                        "chords",
+                        "click",
+                        "off"
+                    ],
+                    "type": "string"
+                },
+                "speedUp": {
+                    "description": "the song speeds up (5% every 4 hits in a row, up to 1.5 times)",
+                    "type": "boolean"
+                },
+                "spotifyClientId": {
+                    "description": "Spotify: the Client ID of the user's Spotify app (to log in)",
+                    "type": "string"
+                },
+                "spotifySync": {
+                    "description": "Spotify: songs linked to Spotify play there, in time with the game",
+                    "type": "boolean"
+                },
+                "syncInput": {
+                    "description": "the sound input listened to (\"\": the sound of the computer when it can, or the default)",
+                    "type": "string"
+                },
+                "tempo": {
+                    "description": "beats per minute",
+                    "type": "number"
+                },
+                "tonics": {
+                    "description": "Tonics asked in quizzes: every key, natural keys only (no sharp or flat), or sharp/flat keys only",
+                    "enum": [
+                        "all",
+                        "natural",
+                        "accidentals"
+                    ],
+                    "type": "string"
+                },
+                "volumes": {
+                    "description": "built-in sound: volume of each part, from 0 to 100",
+                    "properties": {
+                        "bass": {
+                            "type": "number"
+                        },
+                        "chords": {
+                            "type": "number"
+                        },
+                        "click": {
+                            "type": "number"
+                        },
+                        "lead": {
+                            "type": "number"
+                        },
+                        "melody": {
+                            "type": "number"
+                        },
+                        "rhythm": {
+                            "type": "number"
+                        }
+                    },
+                    "type": "object"
                 }
             },
             "type": "object"
@@ -461,10 +797,11 @@
                     "type": "string"
                 },
                 "tonics": {
-                    "description": "Tonics asked in quizzes: every key, or natural keys only (no sharp or flat)",
+                    "description": "Tonics asked in quizzes: every key, natural keys only (no sharp or flat), or sharp/flat keys only",
                     "enum": [
                         "all",
-                        "natural"
+                        "natural",
+                        "accidentals"
                     ],
                     "type": "string"
                 }
@@ -493,6 +830,13 @@
                 "displayRelative": {
                     "type": "boolean"
                 },
+                "excludedMelodies": {
+                    "description": "melodies left out (ids)",
+                    "items": {
+                        "type": "string"
+                    },
+                    "type": "array"
+                },
                 "fingering": {
                     "description": "Hands to display finger numbers for, in learning modes",
                     "enum": [
@@ -520,6 +864,15 @@
                     ],
                     "type": "string"
                 },
+                "practice": {
+                    "description": "play scales, melodies of songs, or random solo phrases (over a backing track)",
+                    "enum": [
+                        "melodies",
+                        "scales",
+                        "solo"
+                    ],
+                    "type": "string"
+                },
                 "requiredCleanRuns": {
                     "type": "number"
                 },
@@ -535,11 +888,29 @@
                     ],
                     "type": "string"
                 },
+                "soloKey": {
+                    "description": "solo: key, as a chroma (\"0\" = C ... \"11\" = B) or \"current\" (notation settings)",
+                    "type": "string"
+                },
+                "soloLength": {
+                    "description": "solo: number of notes of a phrase",
+                    "enum": [
+                        "long",
+                        "medium",
+                        "short"
+                    ],
+                    "type": "string"
+                },
+                "soloScale": {
+                    "description": "solo: scale the phrases are made of (tonal name, e.g. \"minor pentatonic\")",
+                    "type": "string"
+                },
                 "tonics": {
-                    "description": "Tonics asked in quizzes: every key, or natural keys only (no sharp or flat)",
+                    "description": "Tonics asked in quizzes: every key, natural keys only (no sharp or flat), or sharp/flat keys only",
                     "enum": [
                         "all",
-                        "natural"
+                        "natural",
+                        "accidentals"
                     ],
                     "type": "string"
                 }

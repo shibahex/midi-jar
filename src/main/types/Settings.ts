@@ -43,14 +43,56 @@ export type ChordDisplaySettings = {
 /** Hands to display finger numbers for, in learning modes */
 export type Fingering = 'right' | 'left' | 'both' | 'none';
 
-/** Tonics asked in quizzes: every key, or natural keys only (no sharp or flat) */
-export type Tonics = 'all' | 'natural';
+/** A song imported from a ChordPro file or a chord sheet */
+/** Parts of a song played by the built-in sound (Songsterr songs) */
+export type SongPartRole = 'rhythm' | 'bass' | 'lead' | 'melody';
+
+/** The notes of a part: flat [start, length, midi, velocity, ...] in beats from the song start */
+export type SongPart = { role: SongPartRole; name: string; notes: number[] };
+
+export type ImportedSong = {
+  id: string;
+  title: string;
+  /** key of the song, e.g. "G" or "Em" (from the file, or the first chord) */
+  key: string;
+  /** chord names in order, e.g. ["G", "Em7", "C", "D"] */
+  chords: string[];
+  /** length of each chord in beats (from bar lines), one bar each if not given */
+  beats?: number[];
+  /** beats in a bar (time signature: 3 for 3/4) */
+  beatsPerBar?: number;
+  /** tempo of the song (beats per minute) */
+  bpm?: number;
+  /** the song's own rhythm: a chord is played every N beats (from the strumming) */
+  beatsPerHit?: number;
+  /** web address the song was imported from (to import it again) */
+  url?: string;
+  /** parts of the song (verse, chorus...): their name and the index of their first chord */
+  sections?: { name: string; start: number }[];
+  /** beats of intro before the first chord */
+  leadIn?: number;
+  /** notes of the instruments (rhythm guitar, bass, lead, melody), to hear the real song */
+  parts?: SongPart[];
+  /** the song on Spotify, and where its first chord is in the recording (ms, once synced) */
+  spotify?: {
+    uri: string;
+    name: string;
+    durationMs?: number;
+    firstChordMs?: number;
+    /** how the first chord was found: estimated, tapped, or corrected from the playing */
+    syncedBy?: 'estimate' | 'tap' | 'playing' | 'listening';
+  };
+};
+
+/** Tonics asked in quizzes: every key, natural keys only (no sharp or flat), or sharp/flat keys only */
+export type Tonics = 'all' | 'natural' | 'accidentals';
 
 /** Chord types asked in the chord quiz ("all" uses the difficulty) */
 export type ChordSet = 'majorMinor' | 'triads' | 'sevenths' | 'ninths' | 'triadsSevenths' | 'all';
 
 export type ChordQuizSettings = {
-  mode: 'random' | 'randomInKey' | 'progressions';
+  /** "rhythm" is from before the Rhythm Game had its own module (read as "random") */
+  mode: 'random' | 'randomInKey' | 'progressions' | 'rhythm';
   chords: ChordSet;
   /** chords of the set left out (tonal names, e.g. "m" or "dim") */
   excludedChords: string[];
@@ -75,6 +117,60 @@ export type ChordQuizSettings = {
   customProgressions: string;
 };
 
+export type RhythmGameSettings = {
+  /** beats per minute */
+  tempo: number;
+  /** chords played in the rhythm of the song, once per bar, twice, or on every beat */
+  pattern: 'song' | 'bar' | 'half' | 'beat';
+  /** songs with a tempo of their own (imported) are played at it */
+  songTempo: boolean;
+  /** songs left out (ids) */
+  excludedSongs: string[];
+  /** the song to play (id), or "" for a random song */
+  song: string;
+  /** songs imported from chord sheets or web pages (chords in their key) */
+  customSongs: ImportedSong[];
+  /** the song name is shown from the start, or revealed at the end */
+  showTitle: 'start' | 'end';
+  /** the song speeds up (5% every 4 hits in a row, up to 1.5 times) */
+  speedUp: boolean;
+  /** key of the built-in songs: random, or the current key (notation settings) */
+  songKey: 'random' | 'current';
+  tonics: Tonics;
+  learningMode: boolean;
+  fingering: Fingering;
+  /** learning mode: on a miss, keep going, wait for the chord, or slow down */
+  onMiss: 'continue' | 'wait' | 'slowDown';
+  gamification: boolean;
+  /** built-in sound: the chords of the song, a click on the beat, both, or nothing */
+  sound: 'off' | 'chords' | 'click' | 'both';
+  /** built-in sound: the parts of Songsterr songs heard (the rhythm guitar replaces the chords) */
+  songParts: SongPartRole[];
+  /** built-in sound: volume of each part, from 0 to 100 */
+  volumes: {
+    chords: number;
+    rhythm: number;
+    bass: number;
+    lead: number;
+    melody: number;
+    click: number;
+  };
+  /** built-in sound: the instrument of each part ("" or missing: the sound style's) */
+  instruments: Partial<Record<'chords' | 'rhythm' | 'bass' | 'lead' | 'melody', string>>;
+  /** how late the playing reaches the game (ms): MIDI, audio, bluetooth... it is judged earlier */
+  latencyMs: number;
+  /** Spotify: the Client ID of the user's Spotify app (to log in) */
+  spotifyClientId: string;
+  /** Spotify: songs linked to Spotify play there, in time with the game */
+  spotifySync: boolean;
+  /** Spotify: the song is listened to (a sound input) to sync it */
+  listenSync: boolean;
+  /** the sound input listened to ("": the sound of the computer when it can, or the default) */
+  syncInput: string;
+  /** what the player plays: the chords, or the notes of a part of the song */
+  playPart: 'chords' | SongPartRole;
+};
+
 export type ScaleSet =
   | 'major'
   | 'minor'
@@ -85,6 +181,16 @@ export type ScaleSet =
   | 'all';
 
 export type ScaleQuizSettings = {
+  /** play scales, melodies of songs, or random solo phrases (over a backing track) */
+  practice: 'scales' | 'melodies' | 'solo';
+  /** solo: key, as a chroma ("0" = C ... "11" = B) or "current" (notation settings) */
+  soloKey: string;
+  /** solo: scale the phrases are made of (tonal name, e.g. "minor pentatonic") */
+  soloScale: string;
+  /** solo: number of notes of a phrase */
+  soloLength: 'short' | 'medium' | 'long';
+  /** melodies left out (ids) */
+  excludedMelodies: string[];
   mode: 'random' | 'randomInKey' | 'sequential';
   tonics: Tonics;
   scales: ScaleSet;
@@ -154,6 +260,14 @@ export type ServerSettings = {
 export type GeneralSettings = {
   launchAtStartup: boolean;
   startMinimized: boolean;
+  /** built-in sound: the notes played on the MIDI keyboard are heard */
+  playNotes: boolean;
+  /** built-in sound: volume from 0 to 100 */
+  soundVolume: number;
+  /** built-in sound: classical (piano, strings, flute) or electric */
+  soundStyle: 'classical' | 'electric';
+  /** built-in sound: the instrument heard when playing the keyboard ("" : the style's) */
+  keyboardInstrument: string;
 };
 
 export type Settings = {
@@ -162,6 +276,7 @@ export type Settings = {
   chordQuiz: ChordQuizSettings;
   scaleQuiz: ScaleQuizSettings;
   scaleDegrees: ScaleDegreesSettings;
+  rhythmGame: RhythmGameSettings;
   circleOfFifths: CircleOfFifthsSettings;
   chordDictionary: ChordDictionarySettings;
   notation: NotationSettings;

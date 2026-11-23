@@ -8,6 +8,7 @@ import WindowStateProvider from './contexts/WindowState';
 import SettingsProvider from './contexts/Settings';
 
 import router from './router';
+import SynthMonitor from './components/SynthMonitor';
 
 import './App.scss';
 import ChordDictionaryProvider from './contexts/ChordDictionary';
@@ -20,6 +21,7 @@ const App: React.FC = () => (
           <WindowStateProvider>
             <SettingsProvider>
               <ChordDictionaryProvider>
+                <SynthMonitor />
                 <RouterProvider router={router} />
               </ChordDictionaryProvider>
             </SettingsProvider>

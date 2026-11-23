@@ -12,6 +12,7 @@ import ChordQuiz from 'renderer/views/ChordQuiz/ChordQuiz';
 import CircleOfFifths from 'renderer/views/CircleOfFifths';
 import ScaleQuiz from 'renderer/views/ScaleQuiz';
 import ScaleDegrees from 'renderer/views/ScaleDegrees';
+import RhythmGame from 'renderer/views/RhythmGame';
 
 import './App.scss';
 
@@ -51,6 +52,14 @@ export default function App() {
                     element={
                       <MidiMessageManagerProvider namespace="scale-degrees" source="websocket">
                         <ScaleDegrees />
+                      </MidiMessageManagerProvider>
+                    }
+                  />
+                  <Route
+                    path="rhythm-game"
+                    element={
+                      <MidiMessageManagerProvider namespace="rhythm-game" source="websocket">
+                        <RhythmGame />
                       </MidiMessageManagerProvider>
                     }
                   />

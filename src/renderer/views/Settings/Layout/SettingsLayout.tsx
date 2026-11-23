@@ -94,6 +94,14 @@ const SettingsLayout: React.FC = () => (
           </NavTab>
           <NavTab
             className={cx('tab')}
+            to="/settings/rhythm-game"
+            title="Rhythm Game"
+            left={<Icon name="music" />}
+          >
+            <span className={cx('label')}>Rhythm Game</span>
+          </NavTab>
+          <NavTab
+            className={cx('tab')}
             to="/settings/debug"
             title="Debugger"
             left={<Icon name="bug" />}

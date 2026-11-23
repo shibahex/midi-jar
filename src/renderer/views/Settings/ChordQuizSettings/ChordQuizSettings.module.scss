@@ -15,32 +15,6 @@
   border-radius: 2px;
 }
 
-// chords of a set that can be left out
-.chord--toggle {
-  border: 1px solid $color-primary-normal;
-  color: inherit;
-  font: inherit;
-  cursor: pointer;
-
-  &:disabled {
-    cursor: default;
-  }
-}
-
-.chord--off {
-  border-color: transparent;
-  background: transparent;
-  text-decoration: line-through;
-  opacity: 0.5;
-}
-
-.chordHint {
-  margin-top: 4px;
-  font-size: 0.85em;
-  text-align: center;
-  opacity: 0.6;
-}
-
 // custom progressions, one per line
 .customProgressions {
   width: 100%;
@@ -79,4 +53,181 @@
       color: $color-danger-light;
     }
   }
+}
+
+// imported songs
+.import {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.importUrl {
+  display: flex;
+  width: 100%;
+  gap: 6px;
+
+  > :first-child {
+    flex: 1;
+    min-width: 0;
+  }
+
+  > button {
+    flex-shrink: 0;
+  }
+}
+
+.importMessage {
+  font-size: 0.85em;
+  color: $color-success-light;
+
+  &--error {
+    color: $color-danger-light;
+  }
+}
+
+.importedSongs {
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+
+  li {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+  }
+
+  small {
+    opacity: 0.6;
+  }
+}
+
+.songTempo {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.8em;
+  opacity: 0.85;
+
+  input {
+    width: 4.5em;
+    padding: 2px 4px;
+    border: 1px solid $color-neutral-normal;
+    border-radius: 3px;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+  }
+}
+
+.tempo {
+  width: 6em;
+}
+
+/** A group of settings in a card **/
+
+.group {
+  margin: 1em 0;
+  padding: 0.8em 1em 0.2em;
+  border-radius: 0.6em;
+  border: 1px solid rgba($color-primary-light, 0.35);
+  background: rgba($color-primary-dark, 0.25);
+}
+
+.groupTitle {
+  display: flex;
+  align-items: center;
+  gap: 0.4em;
+  font-weight: bold;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: $color-primary-light;
+}
+
+.groupHint {
+  margin: 0.3em 0 0.6em;
+  font-size: 0.85em;
+  opacity: 0.75;
+
+  a {
+    color: $color-primary-light;
+  }
+}
+
+/** Spotify **/
+
+.steps {
+  margin: 0.3em 0;
+  padding-left: 1.4em;
+}
+
+.code {
+  padding: 0 0.3em;
+  border-radius: 3px;
+  background: rgba($color-black, 0.4);
+  user-select: all;
+}
+
+.spotifyLogin {
+  display: flex;
+  gap: 6px;
+
+  > :first-child {
+    flex: 1;
+    min-width: 0;
+  }
+
+  > button {
+    flex-shrink: 0;
+  }
+}
+
+.importedSongs li {
+  flex-wrap: wrap;
+}
+
+.spotifySong {
+  display: flex;
+  flex-basis: 100%;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin: 2px 0 6px;
+  font-size: 0.8em;
+
+  button:not([class]) {
+    padding: 0 0.5em;
+    border: 1px solid rgba($color-white, 0.25);
+    border-radius: 3px;
+    background: transparent;
+    color: inherit;
+    cursor: pointer;
+  }
+}
+
+.spotifyName {
+  color: #1ed760;
+}
+
+.spotifyHint {
+  opacity: 0.6;
+}
+
+.spotifyOffset {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  opacity: 0.85;
+}
+
+.spotifyUnlink {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: $color-danger-light;
+  cursor: pointer;
 }

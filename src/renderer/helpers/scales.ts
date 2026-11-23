@@ -1,6 +1,6 @@
 import { Interval, Note, Scale } from 'tonal';
 
-import { ScaleSet } from 'main/types';
+import { ScaleSet, Tonics } from 'main/types';
 
 import { randomPick } from './array';
 import { formatSharpsFlats } from './note';
@@ -81,9 +81,14 @@ export function getBestScaleForChroma(chroma: number, type: string): ScaleInfo {
 }
 
 const NATURAL_CHROMAS = [0, 2, 4, 5, 7, 9, 11];
+const ACCIDENTAL_CHROMAS = [1, 3, 6, 8, 10];
 
-const getChromas = (naturalOnly: boolean) =>
-  naturalOnly ? NATURAL_CHROMAS : Array.from({ length: 12 }, (_, chroma) => chroma);
+/** Chromas (0 = C … 11 = B) of the tonics a quiz may ask */
+export function getTonicChromas(tonics: Tonics = 'all'): number[] {
+  if (tonics === 'natural') return NATURAL_CHROMAS;
+  if (tonics === 'accidentals') return ACCIDENTAL_CHROMAS;
+  return Array.from({ length: 12 }, (_, chroma) => chroma);
+}
 
 // Degree of the major key each scale type starts on (C major / A minor → D dorian, A minor…)
 const DEGREE_IN_KEY: Record<string, number> = {
@@ -118,13 +123,13 @@ export function getScaleInKey(key: string, type: string): ScaleInfo {
  * @param set - the scale set to pick from
  * @param tonic - the major key the scale belongs to, or null for a random tonic
  * @param previous - a scale to avoid picking twice in a row
- * @param naturalOnly - only pick tonics without sharps or flats
+ * @param tonics - which tonics to pick: all, natural only, or sharps and flats only
  */
 export function getRandomScale(
   set: ScaleSet,
   tonic: string | null,
   previous?: ScaleInfo | null,
-  naturalOnly = false
+  tonics: Tonics = 'all'
 ): ScaleInfo {
   const types = SCALE_SETS[set] ?? SCALE_SETS.majorMinor;
   let scale: ScaleInfo;
@@ -135,7 +140,7 @@ export function getRandomScale(
     scale =
       tonic !== null
         ? getScaleInKey(tonic, type)
-        : getBestScaleForChroma(randomPick(getChromas(naturalOnly)), type);
+        : getBestScaleForChroma(randomPick(getTonicChromas(tonics)), type);
     attempts += 1;
   } while (previous && previous.id === scale.id && attempts < 10);
 
@@ -145,13 +150,13 @@ export function getRandomScale(
 /**
  * Scales in order, from C to B, every type of the set for each tonic
  */
-export function getScaleSequence(set: ScaleSet, naturalOnly = false) {
+export function getScaleSequence(set: ScaleSet, tonics: Tonics = 'all') {
   const types = SCALE_SETS[set] ?? SCALE_SETS.majorMinor;
-  return getChromas(naturalOnly).flatMap((chroma) => types.map((type) => ({ chroma, type })));
+  return getTonicChromas(tonics).flatMap((chroma) => types.map((type) => ({ chroma, type })));
 }
 
-export function getScaleInSequence(set: ScaleSet, index: number, naturalOnly = false) {
-  const sequence = getScaleSequence(set, naturalOnly);
+export function getScaleInSequence(set: ScaleSet, index: number, tonics: Tonics = 'all') {
+  const sequence = getScaleSequence(set, tonics);
   const { chroma, type } = sequence[index % sequence.length];
   return getBestScaleForChroma(chroma, type);
 }

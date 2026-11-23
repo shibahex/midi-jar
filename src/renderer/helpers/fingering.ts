@@ -3,6 +3,8 @@
  * Fingers: 1 = thumb … 5 = little finger. Descending uses the same finger per note.
  */
 
+import { Interval } from 'tonal';
+
 import { Fingering } from 'main/types';
 
 export type Hand = 'right' | 'left';
@@ -225,4 +227,92 @@ export function getChordFingering(midis: number[], hand: Hand): number[] {
   // left hand mirrors the right hand: thumb on the top note
   const mirrored = sorted.map((m) => -m).reverse();
   return rightChordFingers(mirrored).reverse();
+}
+
+/**
+ * Cost of playing note `b` with finger `fb` right after note `a` with finger `fa` (right hand).
+ * About a whole step per finger, the thumb passes under going up (a finger crosses over
+ * the thumb going down), and the hand moves for big leaps.
+ */
+function melodyMoveCost(a: number, fa: number, b: number, fb: number) {
+  const d = b - a;
+  if (d === 0) return fa === fb ? 0 : 1;
+  // a leap: the hand moves, any finger will do
+  if (Math.abs(d) > 9) return 3;
+
+  const up = d > 0;
+  const fingers = fb - fa;
+  // fingers go the same way as the notes: about 2 semitones per finger
+  if ((up && fingers > 0) || (!up && fingers < 0)) {
+    const stretch = Math.abs(Math.abs(d) - 2 * Math.abs(fingers));
+    return stretch * 0.5 + (Math.abs(d) > 2 * Math.abs(fingers) + 3 ? 3 : 0);
+  }
+  // thumb under going up, or a finger over the thumb going down
+  if ((up && fb === 1 && fa >= 2 && fa <= 4) || (!up && fa === 1 && fb >= 2 && fb <= 4)) {
+    return 1 + Math.max(0, Math.abs(d) - 4) * 0.5;
+  }
+  // same finger on another key, or crossing the wrong way
+  return fa === fb ? 5 : 6;
+}
+
+/** Cost of a finger on a key: no thumb on black keys, pinky better on white keys */
+const melodyKeyCost = (midi: number, f: number) => {
+  if (!isBlackKey(midi)) return 0;
+  if (f === 1) return 2.5;
+  return f === 5 ? 1 : 0;
+};
+
+/**
+ * Fingering for any line of notes (melodies, solo phrases), in the order they are played
+ */
+export function getMelodyFingering(midis: number[], hand: Hand): number[] {
+  if (!midis.length) return [];
+  // the left hand plays like a right hand on a mirrored keyboard (around D)
+  const keys = hand === 'right' ? midis : midis.map((m) => 124 - m);
+
+  const n = keys.length;
+  const cost: number[][] = keys.map(() => Array(6).fill(INF));
+  const from: number[][] = keys.map(() => Array(6).fill(0));
+  for (let f = 1; f <= 5; f += 1) cost[0][f] = melodyKeyCost(keys[0], f);
+
+  for (let i = 1; i < n; i += 1) {
+    for (let f = 1; f <= 5; f += 1) {
+      for (let p = 1; p <= 5; p += 1) {
+        const c =
+          cost[i - 1][p] + melodyMoveCost(keys[i - 1], p, keys[i], f) + melodyKeyCost(keys[i], f);
+        if (c < cost[i][f]) {
+          cost[i][f] = c;
+          from[i][f] = p;
+        }
+      }
+    }
+  }
+
+  let best = 1;
+  for (let f = 2; f <= 5; f += 1) if (cost[n - 1][f] < cost[n - 1][best]) best = f;
+  const fingers = Array(n).fill(0);
+  fingers[n - 1] = best;
+  for (let i = n - 1; i > 0; i -= 1) fingers[i - 1] = from[i][fingers[i]];
+  return fingers;
+}
+
+/** Most notes one hand plays in a chord */
+const MAX_CHORD_NOTES = 5;
+
+/**
+ * A playable voicing of a chord, from its intervals (tonal names, e.g. "3M", "13M"):
+ * big chords leave out the 5th, then the 11th, then the 9th (like pianists do),
+ * and the notes are packed within an octave above the root (close position).
+ * Returns the semitones of each note above the root, ascending.
+ */
+export function getChordVoicing(intervals: string[]): number[] {
+  const semitones = [...new Set(intervals.map((i) => (Interval.semitones(i) ?? 0) % 12))];
+  const drop = (pc: number) => {
+    if (semitones.length > MAX_CHORD_NOTES && semitones.includes(pc) && pc !== 0) {
+      semitones.splice(semitones.indexOf(pc), 1);
+    }
+  };
+  // the perfect 5th, the 11th, then the 9th
+  [7, 5, 2].forEach(drop);
+  return semitones.sort((a, b) => a - b);
 }
