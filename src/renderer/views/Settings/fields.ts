@@ -7,8 +7,9 @@ export const fingeringChoices = [
   { value: 'none', label: 'None' },
 ];
 
-/** Tonics asked: every key, or natural keys only */
+/** Tonics asked: every key, natural keys only, or sharps and flats only */
 export const tonicsChoices = [
   { value: 'all', label: 'All keys' },
   { value: 'natural', label: 'Natural keys only (no sharps or flats)' },
+  { value: 'accidentals', label: 'Sharps and flats only' },
 ];

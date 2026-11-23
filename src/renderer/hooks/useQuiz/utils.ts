@@ -2,7 +2,7 @@ import { Note, Chord, ChordType } from 'tonal';
 import { Chord as TChord } from '@tonaljs/chord';
 import { isEqual, isSubsetOf, isSupersetOf } from '@tonaljs/pcset';
 
-import { ChordQuizSettings, ChordSet, NotationSettings } from 'main/types';
+import { ChordQuizSettings, ChordSet, NotationSettings, Tonics } from 'main/types';
 
 import {
   randomPick,
@@ -20,6 +20,7 @@ import {
   getProgressionChords,
   getRelativeScale,
   getScaleInfo,
+  getTonicChromas,
 } from 'renderer/helpers';
 
 export enum STATUSES {
@@ -276,8 +277,12 @@ export const CHORD_SETS: Record<Exclude<ChordSet, 'all'>, string[]> = {
   ],
 };
 
-/** Natural notes, for "natural keys only" */
-const NATURAL_NOTES = ['C', 'D', 'E', 'F', 'G', 'A', 'B'];
+/** Root notes asked for each "keys" setting */
+const ROOT_NOTES: Record<Tonics, string[]> = {
+  all: NOTE_NAMES,
+  natural: ['C', 'D', 'E', 'F', 'G', 'A', 'B'],
+  accidentals: ['C#', 'D#', 'F#', 'G#', 'A#'],
+};
 
 /**
  * Chords of a set that are asked: every chord of the set but the excluded ones
@@ -312,18 +317,18 @@ export function getChordTypes(
 /**
  * Picks a random chord of the given types, with a tonic spelled in the key signature
  *
- * @param naturalOnly - tonics without sharp or flat
+ * @param tonics - which tonics to pick: all, natural only, or sharps and flats only
  */
 export function getRandomChord(
   keySignature: KeySignatureConfig,
   chordTypes: ChordTypeInfo[],
-  naturalOnly = false
+  tonics: Tonics = 'all'
 ) {
   const type = randomPick(chordTypes);
 
-  const tonic = naturalOnly
-    ? randomPick(NATURAL_NOTES)
-    : getNoteInKeySignature(randomPick(NOTE_NAMES), keySignature.notes);
+  const note = randomPick(ROOT_NOTES[tonics]);
+  // naturals stay as they are; sharps/flats follow the key signature's spelling (C# or Db)
+  const tonic = tonics === 'natural' ? note : getNoteInKeySignature(note, keySignature.notes);
 
   return Chord.getChord(type.aliases[0], tonic);
 }
@@ -377,8 +382,6 @@ export function generateChords(
     }, []);
 }
 
-const NATURAL_CHROMAS = [0, 2, 4, 5, 7, 9, 11];
-
 /**
  * A game of a progression, in a random key or the current key, repeated to about the game length
  */
@@ -394,10 +397,7 @@ export function generateProgressionGame(parameters: Parameters): Game {
     tonic =
       progression.mode === 'major' ? parameters.key : getRelativeScale(majorKey)?.tonic ?? 'A';
   } else {
-    const chromas =
-      parameters.tonics === 'natural'
-        ? NATURAL_CHROMAS
-        : Array.from({ length: 12 }, (_, chroma) => chroma);
+    const chromas = getTonicChromas(parameters.tonics);
     tonic = getBestScaleForChroma(randomPick(chromas), progression.mode).tonic;
   }
 
@@ -437,7 +437,7 @@ export function generateGame(parameters: Parameters) {
     );
     const game = {
       chords: generateChords(parameters.gameLength, () =>
-        getRandomChord(keySignature, chordTypes, parameters.tonics === 'natural')
+        getRandomChord(keySignature, chordTypes, parameters.tonics)
       ),
       score: 0,
       played: [],

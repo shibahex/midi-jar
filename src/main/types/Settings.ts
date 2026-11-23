@@ -84,8 +84,8 @@ export type ImportedSong = {
   };
 };
 
-/** Tonics asked in quizzes: every key, or natural keys only (no sharp or flat) */
-export type Tonics = 'all' | 'natural';
+/** Tonics asked in quizzes: every key, natural keys only (no sharp or flat), or sharp/flat keys only */
+export type Tonics = 'all' | 'natural' | 'accidentals';
 
 /** Chord types asked in the chord quiz ("all" uses the difficulty) */
 export type ChordSet = 'majorMinor' | 'triads' | 'sevenths' | 'ninths' | 'triadsSevenths' | 'all';

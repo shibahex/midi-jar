@@ -14,6 +14,7 @@ import {
   isSamePitchClass,
   randomPick,
   ScaleInfo,
+  getTonicChromas,
 } from 'renderer/helpers';
 import { addScore, NO_FEEDBACK, QuizFeedback, ScoreGame } from 'renderer/helpers/quiz';
 
@@ -116,9 +117,6 @@ export function buildSteps(scale: ScaleInfo, direction: ScaleQuizSettings['direc
   return up;
 }
 
-const NATURAL_CHROMAS = [0, 2, 4, 5, 7, 9, 11];
-const ALL_CHROMAS = Array.from({ length: 12 }, (_, chroma) => chroma);
-
 /**
  * A melody in a major key: random, in order from C to B, or the current key
  */
@@ -128,7 +126,7 @@ function newMelody(
   sequenceIndex: number,
   previousMelody: string | null
 ) {
-  const chromas = options.tonics === 'natural' ? NATURAL_CHROMAS : ALL_CHROMAS;
+  const chromas = getTonicChromas(options.tonics);
   let scale: ScaleInfo;
   if (options.mode === 'randomInKey') scale = getScaleInfo(key, 'major');
   else if (options.mode === 'sequential')
@@ -200,15 +198,14 @@ function newScale(
     return newSoloPhrase(options, key, sequenceIndex);
   }
 
-  const naturalOnly = options.tonics === 'natural';
   const scale =
     options.mode === 'sequential'
-      ? getScaleInSequence(options.scales, sequenceIndex, naturalOnly)
+      ? getScaleInSequence(options.scales, sequenceIndex, options.tonics)
       : getRandomScale(
           options.scales,
           options.mode === 'randomInKey' ? key : null,
           previous,
-          naturalOnly
+          options.tonics
         );
   return { scale, steps: buildSteps(scale, options.direction), sequenceIndex, melody: null };
 }

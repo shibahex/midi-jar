@@ -330,7 +330,7 @@ You can choose which mode (algorithm) to play with:
 You can also choose which chords are asked:
 
 - `Chords`: Major & minor triads only, Triads (maj, min, dim, aug, sus2, sus4), 7th chords (maj7, m7, 7, m7b5, dim7, mMaj7), 9th chords (maj9, m9, 9, 7b9, 7#9, add9), Triads & 7th chords, or All chords
-- `Keys`: all keys, or natural keys only (no sharp or flat root), in `random` mode
+- `Keys`: all keys, natural keys only (no sharp or flat root), or sharps and flats only, in `random` mode
 
 In the settings, click a chord of the list to leave it out (or ask it again): for instance `Triads` with only `maj` and natural keys asks the major triads C, D, E, F, G, A and B.
 
@@ -397,7 +397,7 @@ You can choose which scales are asked:
 
 - `Scales`: Major, Natural Minor, both, the Modes (Ionian to Locrian), the Minor scales (natural, harmonic, melodic), Pentatonics & Blues, or all of them
 - `Tonic`: `random`, `in order` (going up from C to B through every key), or the tonic of the current key signature (in Notation settings)
-- `Keys`: all keys, or natural keys only (no sharp or flat tonic)
+- `Keys`: all keys, natural keys only (no sharp or flat tonic), or sharps and flats only
 - `Direction`: ascending, descending, or up and back down
 
 And how you practice them:
