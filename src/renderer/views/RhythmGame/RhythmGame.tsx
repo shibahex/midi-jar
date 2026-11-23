@@ -809,19 +809,19 @@ const RhythmGame: React.FC = () => {
       .then(() => {
         // (waiting on another note already: paused again next)
         if (waitingRef.current !== null || detachedRef.current) return;
-        const now = performance.now();
+        const at = performance.now();
         const player = spotifyPlayer.current;
         if (player) {
           spotifyPlayer.current = {
             ...player,
             isPlaying: true,
             progressMs: position,
-            at: now,
+            at,
           };
         }
         // (where it is, asked again after a moment: it tells the old place until then)
-        holdPollUntil.current = now + RECORDING_SETTLE_MS;
-        noJumpUntil.current = now + RESUMED_NO_JUMP_MS;
+        holdPollUntil.current = at + RECORDING_SETTLE_MS;
+        noJumpUntil.current = at + RESUMED_NO_JUMP_MS;
         checkRecordingSoon.current(RECORDING_SETTLE_MS + 100);
       })
       .catch((e) => {
@@ -849,15 +849,15 @@ const RhythmGame: React.FC = () => {
     setRate(value);
     const player = spotifyPlayer.current;
     if (player) {
-      const now = performance.now();
+      const at = performance.now();
       // (where it is now, at the speed it had until now)
       const progress = player.isPlaying
-        ? player.progressMs + (now - player.at) * player.rate
+        ? player.progressMs + (at - player.at) * player.rate
         : player.progressMs;
       spotifyPlayer.current = {
         ...player,
         progressMs: progress,
-        at: now,
+        at,
         rate: value,
       };
     }
