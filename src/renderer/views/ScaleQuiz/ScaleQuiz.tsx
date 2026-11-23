@@ -15,6 +15,7 @@ import {
   getMelodyFingering,
   getScaleKeys,
   getScaleSequence,
+  getTonicChromas,
 } from 'renderer/helpers';
 
 import ScaleQuizSteps from './ScaleQuizSteps';
@@ -121,8 +122,8 @@ const ScaleQuiz: React.FC = () => {
 
   // keys from C to B (melodies are all in major keys)
   const sequenceLength = useMemo(() => {
-    if (quizSettings.practice === 'melodies') return quizSettings.tonics === 'natural' ? 7 : 12;
-    return getScaleSequence(quizSettings.scales, quizSettings.tonics === 'natural').length;
+    if (quizSettings.practice === 'melodies') return getTonicChromas(quizSettings.tonics).length;
+    return getScaleSequence(quizSettings.scales, quizSettings.tonics).length;
   }, [quizSettings.practice, quizSettings.scales, quizSettings.tonics]);
 
   return (

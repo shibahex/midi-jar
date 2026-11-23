@@ -38,6 +38,7 @@ import {
   sourceName,
   spotifyLinkFor,
   NO_CHORD,
+  getTonicChromas,
 } from 'renderer/helpers';
 
 import { Channel, INSTRUMENTS, InstrumentName, synth } from 'renderer/helpers/synth';
@@ -76,9 +77,6 @@ import {
 import styles from './RhythmGame.module.scss';
 
 const cx = classnames.bind(styles);
-
-const NATURAL_CHROMAS = [0, 2, 4, 5, 7, 9, 11];
-const ALL_CHROMAS = Array.from({ length: 12 }, (_, chroma) => chroma);
 
 /** lane: where the hit line is, and how much of the lane a beat takes (percent) */
 const HIT_LINE = 15;
@@ -369,7 +367,7 @@ const RhythmGame: React.FC = () => {
       if (gameSettings.songKey === 'current') {
         tonic = mode === 'major' ? key : getRelativeScale(getScaleInfo(key, 'major'))?.tonic ?? 'A';
       } else {
-        const chromas = gameSettings.tonics === 'natural' ? NATURAL_CHROMAS : ALL_CHROMAS;
+        const chromas = getTonicChromas(gameSettings.tonics);
         tonic = getBestScaleForChroma(randomPick(chromas), mode).tonic;
       }
       const chords = getSongChords(song.song, tonic);

@@ -323,10 +323,11 @@
                     "type": "boolean"
                 },
                 "tonics": {
-                    "description": "Tonics asked in quizzes: every key, or natural keys only (no sharp or flat)",
+                    "description": "Tonics asked in quizzes: every key, natural keys only (no sharp or flat), or sharp/flat keys only",
                     "enum": [
                         "all",
-                        "natural"
+                        "natural",
+                        "accidentals"
                     ],
                     "type": "string"
                 }
@@ -740,10 +741,11 @@
                     "type": "number"
                 },
                 "tonics": {
-                    "description": "Tonics asked in quizzes: every key, or natural keys only (no sharp or flat)",
+                    "description": "Tonics asked in quizzes: every key, natural keys only (no sharp or flat), or sharp/flat keys only",
                     "enum": [
                         "all",
-                        "natural"
+                        "natural",
+                        "accidentals"
                     ],
                     "type": "string"
                 },
@@ -821,10 +823,11 @@
                     "type": "string"
                 },
                 "tonics": {
-                    "description": "Tonics asked in quizzes: every key, or natural keys only (no sharp or flat)",
+                    "description": "Tonics asked in quizzes: every key, natural keys only (no sharp or flat), or sharp/flat keys only",
                     "enum": [
                         "all",
-                        "natural"
+                        "natural",
+                        "accidentals"
                     ],
                     "type": "string"
                 }
@@ -929,10 +932,11 @@
                     "type": "string"
                 },
                 "tonics": {
-                    "description": "Tonics asked in quizzes: every key, or natural keys only (no sharp or flat)",
+                    "description": "Tonics asked in quizzes: every key, natural keys only (no sharp or flat), or sharp/flat keys only",
                     "enum": [
                         "all",
-                        "natural"
+                        "natural",
+                        "accidentals"
                     ],
                     "type": "string"
                 }
