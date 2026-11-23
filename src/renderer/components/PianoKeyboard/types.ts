@@ -13,5 +13,9 @@ export type PianoKeyboardProps = {
   targets?: number[] | null;
   exactTargets?: boolean;
   softTargets?: number[] | null;
+  /** notes played in another octave than the keys to play (they count): shown apart */
+  otherOctave?: number[] | null;
+  /** keys still held from the notes just played right: green, not red */
+  rightPlayed?: number[] | null;
   chord?: Chord;
 };

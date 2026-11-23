@@ -331,11 +331,22 @@ export async function startCapture(sender: WebContents, uri?: string) {
   // Spotify (or the browser) alone when it can be heard so
   const youtube = !!uri && isYouTubeUri(uri);
   following = { sender };
-  try {
-    await startAppCapture(sender, youtube ? BROWSER_APP : SPOTIFY_APP);
-    return youtube ? 'Browser only' : 'Spotify only';
-  } catch (e) {
-    following = null;
+  // (Spotify may have only just started to play: its stream is looked for a few times before
+  // the whole computer is heard instead)
+  const tries = youtube ? 1 : 4;
+  for (let i = 0; i < tries; i += 1) {
+    try {
+      // eslint-disable-next-line no-await-in-loop
+      await startAppCapture(sender, youtube ? BROWSER_APP : SPOTIFY_APP);
+      return youtube ? 'Browser only' : 'Spotify only';
+    } catch (e) {
+      if (i + 1 < tries && following?.sender === sender) {
+        // eslint-disable-next-line no-await-in-loop
+        await wait(1000);
+      } else {
+        following = null;
+      }
+    }
   }
   const errors: string[] = [];
   for (let i = 0; i < COMMANDS.length; i += 1) {

@@ -19,7 +19,10 @@ const track = (uri: string, name: string, artists: string, durationMs = 222000):
 describe('following Spotify', () => {
   const songs = [
     song('a', 'Petal Dance (AI) by Gingerbee'),
-    song('b', 'Honey', { uri: 'spotify:track:honey', name: 'Honey (gingerbee)' }),
+    song('b', 'Honey', {
+      uri: 'spotify:track:honey',
+      name: 'Honey (gingerbee)',
+    }),
     song('c', 'Petal Dance by Someone Else'),
   ];
 
@@ -27,6 +30,19 @@ describe('following Spotify', () => {
     expect(findSongForTrack(songs, track('spotify:track:honey', 'Honey', 'gingerbee'))?.id).toBe(
       'b'
     );
+  });
+
+  it('does not find a linked song that is about another song', () => {
+    const wrong = song('w', 'once upon a december by Liz Callaway', {
+      uri: 'youtube:Wez-mAbOHxY',
+      name: 'Untitled (None Deserved) (Robin Callaway)',
+    });
+    expect(
+      findSongForTrack(
+        [wrong],
+        track('youtube:Wez-mAbOHxY', 'Untitled (None Deserved)', 'Robin Callaway')
+      )
+    ).toBeUndefined();
   });
 
   it('finds a song by its name and artist, whatever the brackets and versions', () => {

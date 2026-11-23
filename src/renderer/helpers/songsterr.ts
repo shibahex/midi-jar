@@ -71,7 +71,11 @@ export type SongsterrTrack = {
 };
 
 /** A track to fetch, and what it is used for */
-export type SongsterrTrackRef = { role: SongPartRole; name: string; url: string };
+export type SongsterrTrackRef = {
+  role: SongPartRole;
+  name: string;
+  url: string;
+};
 
 export const isSongsterrUrl = (url: string) => {
   try {
@@ -87,14 +91,48 @@ const parseJson = (text: string) => JSON.parse(text.replace(/[\u0000-\u001f]+/g,
 
 /** Songsterr's search: the first song found for a name ("seven nation army") */
 export const getSongsterrSearchUrl = (name: string) =>
-  `https://www.songsterr.com/api/songs?size=1&pattern=${encodeURIComponent(name.trim())}`;
+  `https://www.songsterr.com/api/songs?size=10&pattern=${encodeURIComponent(name.trim())}`;
 
-/** The page of the first song of a Songsterr search, or null */
-export function readSongsterrSearch(json: string) {
+/** The words of a text, lower case */
+const wordsOf = (text: string) =>
+  text
+    .toLowerCase()
+    .split(/[^\p{L}\p{N}]+/u)
+    .filter(Boolean);
+
+/**
+ * The page of the song searched for, or null: Songsterr also answers with songs that only look
+ * like it ("Untitled Robin Callaway" gives "Once Upon a December" by Liz Callaway), so the
+ * song's whole title must be in what was searched, and half of the artist's name too (when the
+ * search is not the title alone); the longest title first, in Songsterr's order
+ */
+export function readSongsterrSearch(json: string, searched?: string) {
   try {
-    const songs = parseJson(json) as { songId?: number }[];
-    const id = songs?.[0]?.songId;
-    return id ? `https://www.songsterr.com/a/wsa/song-tab-s${id}` : null;
+    const songs = parseJson(json) as {
+      songId?: number;
+      title?: string;
+      artist?: string;
+    }[];
+    const asked = searched === undefined ? null : new Set(wordsOf(searched));
+    const matches = (song: { title?: string; artist?: string }) => {
+      if (!asked) return true;
+      const title = wordsOf((song.title ?? '').replace(/\s*[([][^)\]]*[)\]]/g, ''));
+      if (!title.length || !title.every((word) => asked.has(word))) return false;
+      const artist = wordsOf(song.artist ?? '');
+      const rest = asked.size - new Set(title).size;
+      return (
+        rest <= 0 ||
+        !artist.length ||
+        artist.filter((word) => asked.has(word)).length >= artist.length / 2
+      );
+    };
+    const found = (Array.isArray(songs) ? songs : [])
+      .filter((song) => song.songId && matches(song))
+      .reduce<(typeof songs)[number] | undefined>(
+        (a, b) => (!a || wordsOf(b.title ?? '').length > wordsOf(a.title ?? '').length ? b : a),
+        undefined
+      );
+    return found ? `https://www.songsterr.com/a/wsa/song-tab-s${found.songId}` : null;
   } catch (e) {
     return null;
   }
@@ -113,8 +151,8 @@ export function readSongsterrPage(html: string): SongsterrSong | null {
   }
 }
 
-/** Other instruments kept (piano, strings, synth...), to be played by the player */
-const MAX_OTHER_PARTS = 6;
+/** Other instruments kept (piano, strings, synth...), to be played by the player: all of them */
+const MAX_OTHER_PARTS = Infinity;
 
 /**
  * Tracks to read: the rhythm guitar (chords), the bass, the lead guitar and the vocal melody,
@@ -225,7 +263,10 @@ function tempoWarp(
   const sorted = [...tempos]
     .filter((t) => t.bpm > 0)
     .sort((a, b) => a.measure - b.measure)
-    .map((t) => ({ from: measureStarts[t.measure] ?? Infinity, ratio: main / t.bpm }));
+    .map((t) => ({
+      from: measureStarts[t.measure] ?? Infinity,
+      ratio: main / t.bpm,
+    }));
   if (!sorted.length) return (position: number) => position;
   return (position: number) => {
     let warped = 0;
@@ -242,7 +283,12 @@ function tempoWarp(
   };
 }
 
-type PlayedNote = { start: number; length: number; midi: number; velocity: number };
+type PlayedNote = {
+  start: number;
+  length: number;
+  midi: number;
+  velocity: number;
+};
 
 /** Every note of a track, in quarter notes from the start (tied notes are held) */
 function readNotes(track: SongsterrTrack, measureStarts: number[]) {
@@ -272,7 +318,12 @@ function readNotes(track: SongsterrTrack, measureStarts: number[]) {
             let velocity = 90;
             if (note.ghost) velocity = 50;
             if (note.accentuated) velocity = 115;
-            notes.push({ start: time, length: Math.max(length, 0.1), midi, velocity });
+            notes.push({
+              start: time,
+              length: Math.max(length, 0.1),
+              midi,
+              velocity,
+            });
           });
         }
         time += length;

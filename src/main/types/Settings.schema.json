@@ -644,8 +644,62 @@
                     ],
                     "type": "string"
                 },
+                "view": {
+                    "description": "the notes scroll from right to left (a lane), or fall down a highway of 7 lanes",
+                    "enum": [
+                        "highway",
+                        "lane"
+                    ],
+                    "type": "string"
+                },
+                "keyboardKeys": {
+                    "description": "the player's keyboard (its keys shown, each one where it is), or the keys of each song",
+                    "enum": [
+                        "25",
+                        "37",
+                        "49",
+                        "61",
+                        "76",
+                        "88",
+                        "fit"
+                    ],
+                    "type": "string"
+                },
+                "repeatedNotes": {
+                    "description": "a part's chords struck again fast (a guitar strumming): played by holding, or each struck",
+                    "enum": [
+                        "each",
+                        "hold"
+                    ],
+                    "type": "string"
+                },
+                "keyboardOctave": {
+                    "description": "the learning keyboard: follows the octave played in, or stays in one (moved by hand)",
+                    "enum": [
+                        "fixed",
+                        "follow",
+                        "song"
+                    ],
+                    "type": "string"
+                },
+                "keyboardTranspose": {
+                    "description": "the song's notes shown octaves higher (or lower: negative)",
+                    "type": "number"
+                },
+                "keyboardOctaveShift": {
+                    "description": "the octave it stays in (octaves from C4–B5)",
+                    "type": "number"
+                },
+                "spotifySlowDown": {
+                    "description": "slowing down a song synced with Spotify (it has no speed): Spotify is paused and the game\nplays the song by itself, slower, until it is back to speed; or it waits for the note",
+                    "enum": [
+                        "game",
+                        "wait"
+                    ],
+                    "type": "string"
+                },
                 "onMiss": {
-                    "description": "learning mode: on a miss, keep going, wait for the chord, or slow down",
+                    "description": "on a miss, keep going, wait for the note, or slow down",
                     "enum": [
                         "continue",
                         "slowDown",
@@ -719,6 +773,10 @@
                         "off"
                     ],
                     "type": "string"
+                },
+                "strictOctaves": {
+                    "description": "a part's notes are played in their octave (where the keyboard shows them), not any octave",
+                    "type": "boolean"
                 },
                 "speedUp": {
                     "description": "the song speeds up (5% every 4 hits in a row, up to 1.5 times)",
@@ -957,4 +1015,3 @@
     },
     "type": "object"
 }
-

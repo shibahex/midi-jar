@@ -104,7 +104,8 @@ export async function play(uri: string, positionMs: number) {
     if (!media) return false;
   }
   await seekSession(media.session, positionMs);
-  if (!media.session.isPlaying) await playSession(media.session);
+  // (always: right after a pause the app may still say it plays, and would not be started again)
+  await playSession(media.session);
   return true;
 }
 

@@ -230,36 +230,61 @@ export function getChordFingering(midis: number[], hand: Hand): number[] {
 }
 
 /**
- * Cost of playing note `b` with finger `fb` right after note `a` with finger `fa` (right hand).
- * About a whole step per finger, the thumb passes under going up (a finger crosses over
- * the thumb going down), and the hand moves for big leaps.
+ * How far apart two fingers of a right hand reach (semitones from the lower finger's key to the
+ * higher one's; negative: crossed): [practical min, comfortable min, relaxed min, relaxed max,
+ * comfortable max, practical max] (Parncutt et al., 1997)
+ */
+const SPANS: Record<string, number[]> = {
+  '12': [-5, -3, 1, 5, 8, 10],
+  '13': [-4, -2, 3, 7, 10, 12],
+  '14': [-3, -1, 5, 9, 12, 14],
+  '15': [-1, 1, 7, 10, 13, 15],
+  '23': [1, 1, 1, 2, 3, 5],
+  '24': [1, 1, 3, 4, 5, 7],
+  '25': [2, 2, 5, 6, 8, 10],
+  '34': [1, 1, 1, 2, 2, 4],
+  '35': [1, 1, 3, 4, 5, 7],
+  '45': [1, 1, 1, 2, 3, 5],
+};
+
+/**
+ * Cost of playing note `b` with finger `fb` right after note `a` with finger `fa` (right hand):
+ * the fingers of a hand kept in place cost nothing, stretching them apart or squeezing them
+ * together (a thumb passing under) costs, and so does moving the hand
  */
 function melodyMoveCost(a: number, fa: number, b: number, fb: number) {
-  const d = b - a;
-  if (d === 0) return fa === fb ? 0 : 1;
-  // a leap: the hand moves, any finger will do
-  if (Math.abs(d) > 9) return 3;
+  if (fa === fb) return a === b ? 0 : 10;
+  // the span from the lower finger's key to the higher finger's
+  const low = Math.min(fa, fb);
+  const high = Math.max(fa, fb);
+  const span = fa < fb ? b - a : a - b;
+  const [minPrac, minComf, minRel, maxRel, maxComf, maxPrac] = SPANS[`${low}${high}`];
+  // out of reach: the hand moves
+  if (span < minPrac || span > maxPrac) return 8;
+  const thumb = low === 1 ? 2 : 1;
+  return (
+    2 * Math.max(0, minComf - span, span - maxComf) +
+    thumb * Math.max(0, minRel - span) +
+    thumb * Math.max(0, span - maxRel)
+  );
+}
 
-  const up = d > 0;
-  const fingers = fb - fa;
-  // fingers go the same way as the notes: about 2 semitones per finger
-  if ((up && fingers > 0) || (!up && fingers < 0)) {
-    const stretch = Math.abs(Math.abs(d) - 2 * Math.abs(fingers));
-    return stretch * 0.5 + (Math.abs(d) > 2 * Math.abs(fingers) + 3 ? 3 : 0);
-  }
-  // thumb under going up, or a finger over the thumb going down
-  if ((up && fb === 1 && fa >= 2 && fa <= 4) || (!up && fa === 1 && fb >= 2 && fb <= 4)) {
-    return 1 + Math.max(0, Math.abs(d) - 4) * 0.5;
-  }
-  // same finger on another key, or crossing the wrong way
-  return fa === fb ? 5 : 6;
+/**
+ * Cost of a note two notes after another (right hand): the hand kept in place plays a key
+ * again with the same finger, and keeps its fingers apart like they were
+ */
+function melodySkipCost(a: number, fa: number, c: number, fc: number) {
+  if (a === c) return fa === fc ? 0 : 3;
+  return melodyMoveCost(a, fa, c, fc) / 2;
 }
 
 /** Cost of a finger on a key: no thumb on black keys, pinky better on white keys */
 const melodyKeyCost = (midi: number, f: number) => {
-  if (!isBlackKey(midi)) return 0;
+  // (the ring and little fingers are the weaker ones)
+  const weak = f >= 4 ? 0.5 : 0;
+  if (!isBlackKey(midi)) return weak;
   if (f === 1) return 2.5;
-  return f === 5 ? 1 : 0;
+  return weak + (f === 5 ? 1 : 0);
 };
 
 /**
@@ -271,28 +296,46 @@ export function getMelodyFingering(midis: number[], hand: Hand): number[] {
   const keys = hand === 'right' ? midis : midis.map((m) => 124 - m);
 
   const n = keys.length;
-  const cost: number[][] = keys.map(() => Array(6).fill(INF));
-  const from: number[][] = keys.map(() => Array(6).fill(0));
-  for (let f = 1; f <= 5; f += 1) cost[0][f] = melodyKeyCost(keys[0], f);
-
-  for (let i = 1; i < n; i += 1) {
+  if (n === 1) return [1];
+  // each state: the fingers of the note before and of this one (the hand's place over three
+  // notes: a note played again with another finger, a finger gone to another key, moved it)
+  const state = (p: number, f: number) => p * 6 + f;
+  const cost: number[][] = keys.map(() => Array(36).fill(INF));
+  const from: number[][] = keys.map(() => Array(36).fill(0));
+  for (let p = 1; p <= 5; p += 1) {
     for (let f = 1; f <= 5; f += 1) {
-      for (let p = 1; p <= 5; p += 1) {
-        const c =
-          cost[i - 1][p] + melodyMoveCost(keys[i - 1], p, keys[i], f) + melodyKeyCost(keys[i], f);
-        if (c < cost[i][f]) {
-          cost[i][f] = c;
-          from[i][f] = p;
+      cost[1][state(p, f)] =
+        melodyKeyCost(keys[0], p) +
+        melodyMoveCost(keys[0], p, keys[1], f) +
+        melodyKeyCost(keys[1], f);
+    }
+  }
+
+  for (let i = 2; i < n; i += 1) {
+    for (let p = 1; p <= 5; p += 1) {
+      for (let f = 1; f <= 5; f += 1) {
+        const step = melodyMoveCost(keys[i - 1], p, keys[i], f) + melodyKeyCost(keys[i], f);
+        for (let q = 1; q <= 5; q += 1) {
+          const c = cost[i - 1][state(q, p)] + step + melodySkipCost(keys[i - 2], q, keys[i], f);
+          if (c < cost[i][state(p, f)]) {
+            cost[i][state(p, f)] = c;
+            from[i][state(p, f)] = q;
+          }
         }
       }
     }
   }
 
-  let best = 1;
-  for (let f = 2; f <= 5; f += 1) if (cost[n - 1][f] < cost[n - 1][best]) best = f;
+  let best = state(1, 1);
+  for (let p = 1; p <= 5; p += 1) {
+    for (let f = 1; f <= 5; f += 1) {
+      if (cost[n - 1][state(p, f)] < cost[n - 1][best]) best = state(p, f);
+    }
+  }
   const fingers = Array(n).fill(0);
-  fingers[n - 1] = best;
-  for (let i = n - 1; i > 0; i -= 1) fingers[i - 1] = from[i][fingers[i]];
+  fingers[n - 1] = best % 6;
+  fingers[n - 2] = Math.floor(best / 6);
+  for (let i = n - 1; i > 1; i -= 1) fingers[i - 2] = from[i][state(fingers[i - 1], fingers[i])];
   return fingers;
 }
 

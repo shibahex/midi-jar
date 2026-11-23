@@ -21,7 +21,10 @@ export async function importSongFromWeb(text: string): Promise<Omit<ImportedSong
   const isAddress = /^https?:\/\//i.test(address) || /^[^\s]+\.[a-z]{2,}(\/|$)/i.test(address);
   let fullAddress = /^https?:\/\//i.test(address) ? address : `https://${address}`;
   if (!isAddress) {
-    const found = readSongsterrSearch(await window.app.fetchPage(getSongsterrSearchUrl(address)));
+    const found = readSongsterrSearch(
+      await window.app.fetchPage(getSongsterrSearchUrl(address)),
+      address
+    );
     if (!found) throw new Error(`no Songsterr song found for "${address}"`);
     fullAddress = found;
   }
@@ -30,13 +33,20 @@ export async function importSongFromWeb(text: string): Promise<Omit<ImportedSong
   let result: ReturnType<typeof parseSongPage>;
   if (songsterr) {
     // Songsterr: the notes of the rhythm guitar, bass, lead and melody, with their timing
-    const tracks = await Promise.all(
-      getSongsterrTracks(songsterr).map(async ({ role, name, url }) => ({
-        role,
-        name,
-        track: readSongsterrTrack(await window.app.fetchPage(url)),
-      }))
-    );
+    // (every instrument of the song, a few at a time)
+    const refs = getSongsterrTracks(songsterr);
+    const tracks: Parameters<typeof songFromSongsterr>[1] = [];
+    for (let i = 0; i < refs.length; i += 6) {
+      // eslint-disable-next-line no-await-in-loop
+      const batch = await Promise.all(
+        refs.slice(i, i + 6).map(async ({ role, name, url }) => ({
+          role,
+          name,
+          track: readSongsterrTrack(await window.app.fetchPage(url)),
+        }))
+      );
+      tracks.push(...batch);
+    }
     result = songFromSongsterr(songsterr, tracks, fullAddress);
   } else {
     result = parseSongPage(page, fullAddress);
@@ -96,9 +106,18 @@ const simple = (name: string) =>
  * artist, when the song's title has one: "Name by Artist")
  */
 export function findSongForTrack(songs: ImportedSong[], track: SpotifyTrack) {
-  const linked = songs.find((song) => isLinkedSong(track, song.spotify));
-  if (linked) return linked;
   const name = simple(track.name);
+  // (linked, and about it: a song imported from a wrong tab, linked to the video before its
+  // name was checked, shares no word with it)
+  const words = new Set(name.split(' '));
+  const linked = songs.find(
+    (song) =>
+      isLinkedSong(track, song.spotify) &&
+      simple(song.title.split(/\s+by\s+/i)[0])
+        .split(' ')
+        .some((word) => words.has(word))
+  );
+  if (linked) return linked;
   const artists = track.artists.split(',').map(simple);
   return songs.find((song) => {
     const [title, artist] = song.title.split(/\s+by\s+/i);
@@ -116,7 +135,11 @@ export function findSongByName(songs: ImportedSong[], name: string) {
   const titled = songs
     .map((song) => {
       const [title, artist] = song.title.split(/\s+by\s+/i);
-      return { song, title: simple(title), artist: artist ? simple(artist) : '' };
+      return {
+        song,
+        title: simple(title),
+        artist: artist ? simple(artist) : '',
+      };
     })
     .filter(({ title }) => title && typed.includes(` ${title} `))
     // (the artist typed too: that one first)

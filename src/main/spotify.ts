@@ -335,7 +335,54 @@ export async function getBars(uri: string): Promise<number[] | null> {
   }
 }
 
-/** The first track found for a song name, or null */
+/** The id of a track from its link (open.spotify.com/track/<id>, spotify:track:<id>), or null */
+export function trackIdFromLink(link: string) {
+  return (
+    /(?:open\.spotify\.com\/(?:intl-[\w-]+\/)?track\/|spotify:track:)([A-Za-z0-9]{22})/.exec(
+      link
+    )?.[1] ?? null
+  );
+}
+
+/** A meta tag of a page ("og:title"), or '' */
+const metaOf = (page: string, name: string) =>
+  (new RegExp(`<meta[^>]+(?:property|name)="${name}"[^>]+content="([^"]*)"`).exec(page)?.[1] ?? '')
+    .replace(/&amp;/g, '&')
+    .replace(/&quot;/g, '"')
+    .replace(/&#x27;|&#39;/g, "'");
+
+/**
+ * A track from its link: from the Web API when connected, else from its public page (no login:
+ * its name, artist and length are in the page's tags)
+ */
+export async function getTrack(link: string): Promise<SpotifyTrack> {
+  const id = trackIdFromLink(link);
+  if (!id) throw new Error('Not a Spotify track link');
+  if (getAuth()) {
+    try {
+      return toTrack((await api(`/tracks/${id}`)) as ApiTrack);
+    } catch (e) {
+      // (as without a login)
+    }
+  }
+  const response = await fetch(`https://open.spotify.com/track/${id}`, {
+    headers: { 'Accept-Language': 'en' },
+  });
+  if (!response.ok) throw new Error(`Spotify could not be reached (error ${response.status})`);
+  const page = await response.text();
+  const name = metaOf(page, 'og:title');
+  if (!name) throw new Error('Spotify did not give this track');
+  // "Artist · Album · Song · 2020"
+  const artists = metaOf(page, 'og:description').split(' · ')[0] ?? '';
+  return {
+    uri: `spotify:track:${id}`,
+    name,
+    artists,
+    durationMs: Number(metaOf(page, 'music:duration')) * 1000 || 0,
+    imageUrl: metaOf(page, 'og:image') || undefined,
+  };
+}
+
 /** Words of versions other than the studio one (unless the song asked for is one of them) */
 const OTHER_VERSIONS =
   /\b(live|acoustic|remix|demo|instrumental|karaoke|cover|session|unplugged|sped up|slowed|reverb)\b/i;

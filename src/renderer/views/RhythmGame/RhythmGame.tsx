@@ -1,8 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import classnames from 'classnames/bind';
-import { Button, Select } from '@la-jarre-a-son/ui';
+import { Button } from '@la-jarre-a-son/ui';
 import { useNavigate } from 'react-router-dom';
-import { Chord, Key, Note } from 'tonal';
+import { Chord, Key, Midi, Note } from 'tonal';
 
 import { useSettings } from 'renderer/contexts/Settings';
 import useNotes from 'renderer/hooks/useNotes';
@@ -39,6 +39,7 @@ import {
   spotifyLinkFor,
   NO_CHORD,
   getTonicChromas,
+  getFingeringHands,
 } from 'renderer/helpers';
 
 import { Channel, INSTRUMENTS, InstrumentName, synth } from 'renderer/helpers/synth';
@@ -54,10 +55,13 @@ import {
 import ChordQuizKeyboard from '../ChordQuiz/ChordQuizKeyboard';
 import Mixer from './Mixer';
 import PracticePanel from './PracticePanel';
+import SongLibrary, { SongCover, splitTitle } from './SongLibrary';
 import {
   BEATS_PER_BAR,
   buildHits,
   buildNoteHits,
+  getHandsFingering,
+  mergeRepeats,
   buildPartEvents,
   getBeatMs,
   getSections,
@@ -69,6 +73,7 @@ import {
   isOpen,
   judge,
   matchesChord,
+  matchesNotes,
   RhythmChord,
   Section,
   SongRhythm,
@@ -81,6 +86,34 @@ const cx = classnames.bind(styles);
 /** lane: where the hit line is, and how much of the lane a beat takes (percent) */
 const HIT_LINE = 15;
 const BEAT_WIDTH = 10;
+/**
+ * highway: where the hit line is (percent from the bottom, the notes' heads going through it),
+ * and how tall a beat is (percent)
+ */
+const HIGHWAY_LINE = 6;
+const BEAT_HEIGHT = 9;
+/** highway: the room between notes played close together (percent), and the most a beat takes */
+const HIGHWAY_GAP = 16;
+/** a note's keys pressed this early (ms, before it can be judged) and held into it play it */
+const EARLY_MS = 600;
+/** the most octaves of keys the highway shows (a part going further: moved into them) */
+const MAX_KEY_OCTAVES = 4;
+/** the keys of a keyboard of each size (MIDI, the lowest and the highest) */
+const KEYBOARD_SIZES: Record<string, [number, number]> = {
+  '25': [48, 72],
+  '37': [48, 84],
+  '49': [36, 84],
+  '61': [36, 96],
+  '76': [28, 103],
+  '88': [21, 108],
+};
+/** the white keys of an octave by chroma (C D E F G A B: 0 to 6) */
+const WHITE_INDEX: Record<number, number> = { 0: 0, 2: 1, 4: 2, 5: 3, 7: 4, 9: 5, 11: 6 };
+/** a black key: half its width, and how far it is moved from between its white keys (in white
+ * keys) */
+const BLACK_WIDTH = 12 / 41;
+const BLACK_SHIFT: Record<number, number> = { 1: -0.069, 3: 0.069, 6: -0.138, 8: 0, 10: 0.138 };
+const MAX_BEAT_HEIGHT = 45;
 
 /** Notes of a chord played by the built-in sound: a bass note and the chord above it */
 function getGuideNotes(hit: Hit) {
@@ -129,9 +162,18 @@ const OTHER_VOLUME = 65;
  */
 const HEAR_POLL_MS = 2000;
 const HEAR_SETTLE_MS = 1500;
-const HEAR_START_MS = 8000;
+const HEAR_START_MS = 10000;
 /** Spotify further than this from where it should be (ms): it was moved, what follows is not used */
 const HEAR_MOVED_MS = 600;
+/**
+ * Spotify's position (MPRIS) is not a smooth clock: it is stale (the same answer twice), moves in
+ * steps of 1-2 s, and sits at 0 for a few seconds after a play. So a real move in the song is
+ * only told by a jump bigger than this (ms), and parts are polled fast to catch each step
+ */
+const HEAR_JUMP_MS = 2500;
+const HEAR_PART_POLL_MS = 400;
+/** a part whose position jumped is collected again this many times at most */
+const HEAR_RESTARTS = 3;
 /** stopped before this much of the song was heard (ms): nothing is synced */
 const HEAR_MIN_MS = 20000;
 /**
@@ -170,25 +212,99 @@ const spotifyBusyOrNull = (e: unknown) => {
   return null;
 };
 
+/** Quick sync: how often (ms) Spotify is asked while it starts the song */
+const HEAR_START_POLL_MS = 500;
+
+/**
+ * Plays the song in Spotify (from a position, ms) and waits until it really plays it: stopped
+ * or paused, Spotify needs a moment and may tell another position while it starts. It plays
+ * when two answers in a row agree on when the song started (the clock runs steadily). Its
+ * last answer, or an error when it did not play in time (or the player cancelled).
+ */
+async function startSong(
+  link: { uri: string; name: string; durationMs?: number },
+  positionMs: number,
+  cancelled: () => boolean
+): Promise<SpotifyPlayerState> {
+  await window.app.spotify.play(link.uri, positionMs);
+  const askedAt = performance.now();
+  // Spotify's position is stale after a play or a seek (it keeps the old one, or 0, for a few
+  // seconds): it plays when it is where it was asked to be, and moves
+  const seen = new Set<number>();
+  while (performance.now() - askedAt < HEAR_START_MS) {
+    if (cancelled()) throw new Error('Cancelled');
+    // eslint-disable-next-line no-await-in-loop
+    await new Promise((resolve) => {
+      setTimeout(resolve, HEAR_START_POLL_MS);
+    });
+    // eslint-disable-next-line no-await-in-loop
+    const player = await window.app.spotify.player(link.uri).catch(spotifyBusyOrNull);
+    if (
+      player?.isPlaying &&
+      isLinkedSong(player.track, link) &&
+      player.progressMs >= positionMs - 500 &&
+      player.progressMs <= positionMs + HEAR_START_MS + 3000
+    ) {
+      seen.add(Math.round(player.progressMs));
+      if (seen.size >= 2) return player;
+    }
+  }
+  throw new Error(`${sourceName(link.uri)} did not play the song`);
+}
+
 /** Messages of the main process: "Error invoking remote method ...: Error: message" */
 const errorText = (e: unknown) =>
   e instanceof Error ? e.message.replace(/^.*Error: /, '') : String(e);
+
+/**
+ * What a miss does. A song synced with a recording (Spotify, YouTube) waits by pausing it, and
+ * slows down by slowing it down: only YouTube (through the browser extension) can be. Where the
+ * recording cannot be slowed down (Spotify has no speed), the game plays the song by itself
+ * while it is slower (the recording paused), or it waits for the note instead.
+ */
+const missMode = (
+  setting: 'continue' | 'wait' | 'slowDown',
+  recording: boolean,
+  canSlowDown: boolean | null,
+  gamePlaysSlower: boolean
+) =>
+  setting === 'slowDown' && recording && canSlowDown === false && !gamePlaysSlower
+    ? 'wait'
+    : setting;
+
+/**
+ * A recording that was paused and played again, or slowed down: what it tells is not true for
+ * this long (ms), the game follows it by itself meanwhile
+ */
+const RECORDING_SETTLE_MS = 2500;
 
 /**
  * Following Spotify: further off than this (ms), the game goes there at once (Spotify moved);
  * closer, it plays at most this much faster or slower until it is there
  */
 const CLOCK_JUMP_MS = 1500;
+/**
+ * the recording just started again (after a note waited on): what it tells is stale for a
+ * while (Spotify tells the old place, or 0), so the game is not moved at once for this long (ms),
+ * only caught up gently
+ */
+const RESUMED_NO_JUMP_MS = 6000;
+/** moved back at least this much (ms): the notes coming again can be played again */
+const REPLAY_BACK_MS = 2000;
 const CLOCK_CATCH_UP = 0.08;
 /** how far off (ms) the most catching up is made */
 const CLOCK_CATCH_UP_MS = 1000;
 
 /**
- * Spotify is asked where it is this often (ms) while it plays the song; less often when it
- * does not (paused, another song), and not at all after a while (the run stops) or while the
- * game is hidden. Spotify allows few calls.
+ * Spotify is asked where it is this often (ms) while the run starts, and when a button moves
+ * the song (a section, the speed, a note waited on); then only this often, to see it was not
+ * paused or moved (what it tells is a little off each time: the game keeps its own clock
+ * unless Spotify moved). Less often when it does not play the song (paused, another song), and
+ * not at all after a while (the run stops) or while the game is hidden. Spotify allows few
+ * calls.
  */
 const SPOTIFY_POLL_MS = 2000;
+const SPOTIFY_CHECK_MS = 15000;
 const SPOTIFY_IDLE_POLL_MS = 10000;
 const SPOTIFY_IDLE_STOP_MS = 30000;
 /** after an error: when Spotify does not say how long to wait (ms) */
@@ -234,7 +350,11 @@ const sameChord = (a: string, b: string) => {
   );
 };
 
-const LABELS: Record<HitResult, string> = { perfect: 'PERFECT!', good: 'Good', miss: 'Miss' };
+const LABELS: Record<HitResult, string> = {
+  perfect: 'PERFECT!',
+  good: 'Good',
+  miss: 'Miss',
+};
 
 type Round = {
   song: PlayableSong;
@@ -278,7 +398,10 @@ type BarRange = { from: number; to: number };
 /** The beats played: of the sections picked, or of the bars picked in them */
 function runWindow(r: Round, first: number, last: number, bars: BarRange | null) {
   if (!bars) return getBeatRange(r, first, last);
-  return { fromBeat: bars.from * r.beatsPerBar, toBeat: (bars.to + 1) * r.beatsPerBar };
+  return {
+    fromBeat: bars.from * r.beatsPerBar,
+    toBeat: (bars.to + 1) * r.beatsPerBar,
+  };
 }
 
 /** The chords of a part of a song (beats), cut where it starts and ends, and its intro */
@@ -296,9 +419,18 @@ function windowChords(r: Round, fromBeat: number, toBeat: number) {
   return { chords, leadIn: Math.max(0, leadIn - fromBeat) };
 }
 
+/** fast-forward and back (← →, the buttons): ms of the song */
+const SKIP_MS = 5000;
+
 /** speed up: 5% every 4 hits in a row, up to 1.5 times the tempo */
 const SPEED_UP = 1.05;
 const MAX_RATE = 1.5;
+/**
+ * slow down on a miss: 15% slower for each note missed, as slow as needed until the notes are
+ * played (a quarter of the speed at most), then back up 5% every 4 hits in a row
+ */
+const SLOW_DOWN = 0.85;
+const MIN_RATE = 0.25;
 
 type Phase = 'ready' | 'playing' | 'done';
 
@@ -313,7 +445,18 @@ const RhythmGame: React.FC = () => {
   const { key, accidentals } = settings.notation;
   const { tempo, pattern, songTempo: useSongTempo } = gameSettings;
 
-  const { playedMidiNotes, sustainedMidiNotes, midiNotes } = useNotes({ key, accidentals });
+  const {
+    playedMidiNotes,
+    sustainedMidiNotes,
+    midiNotes,
+    chords: playedChords,
+  } = useNotes({
+    key,
+    accidentals,
+  });
+  // the keys held now (read by the game loop)
+  const heldNotes = useRef(playedMidiNotes);
+  heldNotes.current = playedMidiNotes;
 
   // compared by content: settings arrays are new objects after any change
   const excludedSongs = (gameSettings.excludedSongs ?? []).join(',');
@@ -408,6 +551,10 @@ const RhythmGame: React.FC = () => {
   const preferSharps = accidentals === 'sharp';
   // songs whose chords were guessed from the notes: played as chords, or else as a part
   const guessedChordsOn = gameSettings.guessedChords !== false;
+  // a part's chords struck again fast (a guitar strumming): played by holding the chord, or
+  // each struck
+  const repeatsRef = useRef(gameSettings.repeatedNotes);
+  repeatsRef.current = gameSettings.repeatedNotes;
   const makeHits = useCallback(
     (r: Round, win: { fromBeat: number; toBeat: number }, speed: number) => {
       const playTempo = (r.tempo * speed) / 100;
@@ -426,9 +573,14 @@ const RhythmGame: React.FC = () => {
           toBeat
         );
         // notes named like the key of the song (C# minor: sharps)
-        const [tonic] = r.keyLabel.split(' ');
-        const sharps = /[#♯]/.test(tonic) || (!/[b♭]/.test(tonic) && preferSharps);
-        if (events.length) return buildNoteHits(events, playTempo, sharps);
+        // (E major: sharps, F major: flats, C major and A minor: as preferred)
+        const [tonic, mode] = r.keyLabel.replace('♯', '#').replace('♭', 'b').split(' ');
+        const { alteration } = /^min/i.test(mode ?? '') ? Key.minorKey(tonic) : Key.majorKey(tonic);
+        const sharps = alteration > 0 || (alteration === 0 && preferSharps);
+        if (events.length) {
+          const noteHits = buildNoteHits(events, playTempo, sharps);
+          return repeatsRef.current === 'each' ? noteHits : mergeRepeats(noteHits, playTempo);
+        }
       }
       // (the intro plays only when starting from it)
       const { chords, leadIn } = windowChords(r, win.fromBeat, win.toBeat);
@@ -441,7 +593,10 @@ const RhythmGame: React.FC = () => {
   const roundRef = useRef(round);
   roundRef.current = round;
   const { beatsPerBar } = round;
-  const [range, setRange] = useState({ first: 0, last: round.sections.length - 1 });
+  const [range, setRange] = useState({
+    first: 0,
+    last: round.sections.length - 1,
+  });
   // practice: bars picked in the sections (none: the whole sections)
   const [bars, setBars] = useState<BarRange | null>(null);
   const barsRef = useRef(bars);
@@ -454,7 +609,12 @@ const RhythmGame: React.FC = () => {
   const phaseRef = useRef(phase);
   phaseRef.current = phase;
   // practice: starting again, slower or faster (set below, read by the keys)
-  const practiceKeys = useRef({ restart: () => {}, changeSpeed: (_delta: number) => {} });
+  const practiceKeys = useRef({
+    restart: () => {},
+    changeSpeed: (_delta: number) => {},
+    skipBy: (_ms: number) => {},
+    switchView: () => {},
+  });
   // the volumes and the parts (shown over the game while playing)
   // (open at first: hidden with M or its cross)
   const [showMixer, setShowMixer] = useState(true);
@@ -467,8 +627,11 @@ const RhythmGame: React.FC = () => {
   const [combo, setCombo] = useState(0);
   const [bestCombo, setBestCombo] = useState(0);
   const [score, setScore] = useState(0);
-  const [judgement, setJudgement] = useState<{ result: HitResult; id: number } | null>(null);
-  // learning mode: what happens on a miss (wait for the chord, or slow down)
+  const [judgement, setJudgement] = useState<{
+    result: HitResult;
+    id: number;
+  } | null>(null);
+  // what happens on a miss (wait for the note, or slow down)
   // Spotify: the linked song plays there, and the game follows it
   const spotifyLink = round.song.imported?.spotify;
   // linked (and with a tempo): can be synced; synced: the first chord was found in the recording
@@ -495,6 +658,8 @@ const RhythmGame: React.FC = () => {
     track: SpotifyTrack;
     /** Spotify plays the linked song (maybe another release of it) */
     isSong: boolean;
+    /** how fast it plays (1: the real speed) */
+    rate: number;
   } | null>(null);
   // the cover of the song's album (from its link, or seen while Spotify plays it)
   const [seenArt, setSeenArt] = useState<string | undefined>();
@@ -511,7 +676,12 @@ const RhythmGame: React.FC = () => {
   // goes back to where it was
   const syncFirst = useRef<{ uri: string; positionMs: number } | null>(null);
   const syncByPartsRef = useRef(async () => false);
-  const spotifyTiming = useRef({ songStartMs: 0, countInMs: 0, runStartBeat: 0, synced: false });
+  const spotifyTiming = useRef({
+    songStartMs: 0,
+    countInMs: 0,
+    runStartBeat: 0,
+    synced: false,
+  });
   // syncing: tap on the first chord while Spotify plays the song
   const [calibrating, setCalibrating] = useState(false);
   // how early or late each chord was played (ms): a synced song is corrected from them
@@ -547,23 +717,224 @@ const RhythmGame: React.FC = () => {
   const latencyRef = useRef(latencyMs);
   latencyRef.current = latencyMs;
 
-  // a song synced with Spotify cannot wait or slow down on a miss
-  const onMiss =
-    gameSettings.learningMode && !spotifyOn ? gameSettings.onMiss ?? 'continue' : 'continue';
+  // a song synced with a recording (Spotify, YouTube) waits by pausing it, and slows down by
+  // slowing it down (YouTube, through the extension: see missMode for the others)
+  const onMiss = gameSettings.onMiss ?? 'continue';
+  // slower than the recording can play (Spotify): it is paused and the game plays the song
+  const gamePlaysSlower = (gameSettings.spotifySlowDown ?? 'game') === 'game';
+  const gamePlaysSlowerRef = useRef(gamePlaysSlower);
+  gamePlaysSlowerRef.current = gamePlaysSlower;
+  // the recording is paused while the game plays the song by itself, slower
+  const [detached, setDetached] = useState(false);
+  const detachedRef = useRef(false);
   const [rate, setRate] = useState(1);
+  // the speed asked while playing (the practice speed changed without starting again): the
+  // rate the song plays at when not slowed down by misses
+  const [baseRate, setBaseRate] = useState(1);
+  const baseRateRef = useRef(1);
+  // the speed asked (percent): the practice speed, changed while playing
+  const askedSpeed = Math.round(speed * baseRate);
   const [waiting, setWaiting] = useState<number | null>(null);
 
   // song time: real time, paused while waiting, slower when slowed down
   const songTime = useRef(0);
+  // where the count-in starts (song time, ms): the start of the run, or a bar before the
+  // section jumped to
+  const countInFrom = useRef(0);
   const lastReal = useRef(0);
   const rateRef = useRef(1);
   const waitingRef = useRef<number | null>(null);
+  // the recording (Spotify, YouTube) can be slowed down: true or false once known (null: not yet)
+  const rateSupported = useRef<boolean | null>(null);
+  // waiting on a note stops the recording: where it starts again (ms in it)
+  const resumeAt = useRef(0);
+  // the recording is not asked where it is until then (performance.now(), Infinity: paused by
+  // the game): it was just paused or started again, and what it tells is not true yet
+  const holdPollUntil = useRef(0);
   const hitsRef = useRef(hits);
   hitsRef.current = hits;
   const comboRef = useRef(combo);
   comboRef.current = combo;
+  // the recording started again after a note waited on: not jumped to until then
+  // (performance.now()), what it tells is stale
+  const noJumpUntil = useRef(0);
+  // the last pause or play asked to the recording: the next one waits for it (in order: a pause
+  // run before the play asked before it would leave the recording paused, the game stuck)
+  const recordingQueue = useRef<Promise<unknown>>(Promise.resolve());
+  // started again once more when it stays paused right after a note waited on (true: done)
+  const resumeRetried = useRef(false);
+  // asks Spotify where it is after a moment, and follows it (a button moved the song)
+  const checkRecordingSoon = useRef((_afterMs: number) => {});
+
+  /** Where the recording is (ms in it) when the song is at a time (ms): the sync, backwards */
+  const recordingPositionAt = (songMs: number) => {
+    const { songStartMs, countInMs, runStartBeat } = spotifyTiming.current;
+    const beatMap = spotifyLinkRef.current?.beatTimes;
+    const position = beatMap
+      ? msOfBeat(beatMap, runStartBeat + songMs / beatMs - beatsPerBar) + syncShift.current
+      : songMs + songStartMs + syncShift.current - countInMs;
+    return Math.max(0, position);
+  };
+
+  /** Waiting on a note: the recording (Spotify, YouTube) stops until the note is played */
+  const holdRecording = (songMs: number) => {
+    resumeAt.current = recordingPositionAt(songMs);
+    holdPollUntil.current = Infinity;
+    const player = spotifyPlayer.current;
+    // (what it plays until it stops is not followed: the game stays on the note)
+    if (player) {
+      spotifyPlayer.current = {
+        ...player,
+        isPlaying: false,
+        progressMs: resumeAt.current,
+        at: performance.now(),
+      };
+    }
+    resumeRetried.current = false;
+    recordingQueue.current = recordingQueue.current
+      .then(() => window.app.spotify.pause())
+      .catch((e) => showSpotifyError(e));
+  };
+
+  /** The note was played: the recording goes on from the note */
+  const resumeRecording = () => {
+    const uri = spotifyLinkRef.current?.uri;
+    if (!uri) {
+      holdPollUntil.current = 0;
+      return;
+    }
+    const position = resumeAt.current;
+    const playing = recordingQueue.current
+      .then(() => window.app.spotify.play(uri, position))
+      .then(() => {
+        // (waiting on another note already: paused again next)
+        if (waitingRef.current !== null || detachedRef.current) return;
+        const now = performance.now();
+        const player = spotifyPlayer.current;
+        if (player) {
+          spotifyPlayer.current = {
+            ...player,
+            isPlaying: true,
+            progressMs: position,
+            at: now,
+          };
+        }
+        // (where it is, asked again after a moment: it tells the old place until then)
+        holdPollUntil.current = now + RECORDING_SETTLE_MS;
+        noJumpUntil.current = now + RESUMED_NO_JUMP_MS;
+        checkRecordingSoon.current(RECORDING_SETTLE_MS + 100);
+      })
+      .catch((e) => {
+        holdPollUntil.current = 0;
+        showSpotifyError(e, `: play it in ${sourceName(uri)}, the game follows`);
+      });
+    recordingQueue.current = playing;
+  };
+
+  /**
+   * Slows the recording down, or back up (1: the real speed). It cannot (Spotify, YouTube
+   * without the extension): then it is not slowed down, and a miss waits for the note instead.
+   */
+  const setRecordingRate = (value: number) => {
+    const undo = () => {
+      rateSupported.current = false;
+      rateRef.current = 1;
+      setRate(1);
+      baseRateRef.current = 1;
+      setBaseRate(1);
+      const player = spotifyPlayer.current;
+      if (player) spotifyPlayer.current = { ...player, rate: 1 };
+    };
+    rateRef.current = value;
+    setRate(value);
+    const player = spotifyPlayer.current;
+    if (player) {
+      const now = performance.now();
+      // (where it is now, at the speed it had until now)
+      const progress = player.isPlaying
+        ? player.progressMs + (now - player.at) * player.rate
+        : player.progressMs;
+      spotifyPlayer.current = {
+        ...player,
+        progressMs: progress,
+        at: now,
+        rate: value,
+      };
+    }
+    // (the speed it tells is the old one for a moment)
+    holdPollUntil.current = Math.max(holdPollUntil.current, performance.now() + 1500);
+    checkRecordingSoon.current(1600);
+    window.app.spotify
+      .rate(value)
+      .then((changed) => {
+        if (changed) rateSupported.current = true;
+        else undo();
+      })
+      .catch(undo);
+  };
+  // (read by the game loop, which is not made again at each render)
+  const holdRecordingRef = useRef(holdRecording);
+  holdRecordingRef.current = holdRecording;
+  const resumeRecordingRef = useRef(resumeRecording);
+  resumeRecordingRef.current = resumeRecording;
+  const recordingPositionAtRef = useRef(recordingPositionAt);
+  recordingPositionAtRef.current = recordingPositionAt;
+  /** The recording is paused, the game plays the song by itself from where it is */
+  const detachRecording = () => {
+    if (detachedRef.current) return;
+    detachedRef.current = true;
+    setDetached(true);
+    holdRecording(songTime.current);
+  };
+  /** Back to the recording's speed: it goes on from where the game is */
+  const attachRecording = () => {
+    if (!detachedRef.current) return;
+    detachedRef.current = false;
+    setDetached(false);
+    resumeAt.current = recordingPositionAt(songTime.current);
+    // (waiting on a note: it goes on once the note is played)
+    if (waitingRef.current === null) resumeRecording();
+  };
+  /**
+   * The speed the song plays at (1: the real speed): the recording's speed (YouTube), or the
+   * game's alone. A recording that has no speed (Spotify) is paused while the game is slower,
+   * and goes on once it is back to the real speed (or it is not slowed down: see missMode)
+   */
+  const setPlayRate = (value: number) => {
+    if (!spotifyOnRef.current) {
+      rateRef.current = value;
+      setRate(value);
+      return;
+    }
+    if (rateSupported.current !== false) {
+      if (value !== rateRef.current) setRecordingRate(value);
+      return;
+    }
+    if (!gamePlaysSlowerRef.current) return;
+    const next = Math.min(1, value);
+    rateRef.current = next;
+    setRate(next);
+    if (next < 1 - 1e-6) detachRecording();
+    else attachRecording();
+  };
+  const setRecordingRateRef = useRef(setRecordingRate);
+  setRecordingRateRef.current = setRecordingRate;
+  const setPlayRateRef = useRef(setPlayRate);
+  setPlayRateRef.current = setPlayRate;
+  // leaving the game: the video is not left slowed down
+  useEffect(
+    () => () => {
+      if (rateSupported.current) window.app.spotify.rate(1).catch(() => {});
+    },
+    []
+  );
   // a chord must be released before the next hit (repeated chords are struck again)
   const armed = useRef(true);
+  // each key held: when it was pressed (song time, as the game hears it), and whether it played a
+  // note already (a key pressed early for a note plays it when it comes, but only once)
+  const keyPresses = useRef(new Map<number, { time: number; used: boolean }>());
+  // strict octaves: how far the notes to play are moved (semitones, as shown); null: any octave
+  const strictShiftRef = useRef<number | null>(null);
   // built-in sound: the chords of the song, a click on the beat
   const sound = gameSettings.sound ?? 'chords';
   const soundRef = useRef(sound);
@@ -583,7 +954,10 @@ const RhythmGame: React.FC = () => {
   const mutes = (gameSettings.songParts ?? ALL_PARTS).filter((k) => k.startsWith('!')).join(',');
   useEffect(() => {
     const muted = mutes.split(',');
-    const levels = { keyboard: 100, ...(JSON.parse(volumesKey) as Record<string, number>) };
+    const levels = {
+      keyboard: 100,
+      ...(JSON.parse(volumesKey) as Record<string, number>),
+    };
     Object.entries(levels).forEach(([id, value]) =>
       synth.setChannelVolume(id as Channel, muted.includes(`!${id}`) ? 0 : value / 100)
     );
@@ -679,6 +1053,13 @@ const RhythmGame: React.FC = () => {
       const fromNow = next.map((h) => (h.time < t - GOOD_MS ? { ...h, skipped: true } : h));
       hitsRef.current = fromNow;
       setHits(fromNow);
+      // waiting on a note of the other part: the song goes on
+      if (waitingRef.current !== null) {
+        waitingRef.current = null;
+        setWaiting(null);
+        lastReal.current = performance.now();
+        if (spotifyOnRef.current && !detachedRef.current) resumeRecordingRef.current();
+      }
       return;
     }
     setHits(next);
@@ -705,8 +1086,9 @@ const RhythmGame: React.FC = () => {
     const last = options.join
       ? next.sections.length - 1
       : options.last ?? (isNew ? next.sections.length - 1 : range.last);
-    // Spotify plays at the real speed only
-    const playSpeed = spotifyOnRef.current ? 100 : options.speed ?? speed;
+    // a recording plays at its real speed (slower: the game plays alone, see setPlayRate)
+    const askedRunSpeed = options.speed ?? speed;
+    const playSpeed = spotifyOnRef.current ? 100 : askedRunSpeed;
     const listen = !!options.listen;
     // the bars picked are played again (another song or other sections: the sections)
     const runBars = isNew || options.first !== undefined ? null : barsRef.current;
@@ -732,11 +1114,23 @@ const RhythmGame: React.FC = () => {
     setNow(0);
     armed.current = true;
     songTime.current = 0;
+    countInFrom.current = 0;
     lastReal.current = performance.now();
+    // (a video slowed down by the last run is back to its speed)
+    if (rateSupported.current) window.app.spotify.rate(1).catch(() => {});
     rateRef.current = 1;
     setRate(1);
+    baseRateRef.current = 1;
+    setBaseRate(1);
+    detachedRef.current = false;
+    setDetached(false);
     waitingRef.current = null;
     setWaiting(null);
+    holdPollUntil.current = 0;
+    recordingQueue.current = Promise.resolve();
+    resumeRetried.current = false;
+    // (Spotify has no speed: found out for YouTube when a miss slows it down)
+    rateSupported.current = next.song.imported?.spotify?.uri.startsWith('youtube:') ? null : false;
     setSpotifyMessage('');
     spotifyPlayer.current = null;
     hitOffsets.current = [];
@@ -760,8 +1154,28 @@ const RhythmGame: React.FC = () => {
       const countInMs = map
         ? songStartMs - msOfBeat(map, sectionBeat - next.beatsPerBar)
         : next.beatsPerBar * nextBeatMs;
-      spotifyTiming.current = { songStartMs, countInMs, runStartBeat: sectionBeat, synced: false };
-      if (!options.join) {
+      spotifyTiming.current = {
+        songStartMs,
+        countInMs,
+        runStartBeat: sectionBeat,
+        synced: false,
+      };
+      // practice slower than Spotify plays: the game plays alone until back to speed
+      const startSlower =
+        !options.join &&
+        !link.uri.startsWith('youtube:') &&
+        gamePlaysSlowerRef.current &&
+        askedRunSpeed < 100;
+      if (startSlower) {
+        const base = askedRunSpeed / 100;
+        baseRateRef.current = base;
+        setBaseRate(base);
+        rateRef.current = base;
+        setRate(base);
+        detachedRef.current = true;
+        setDetached(true);
+        holdPollUntil.current = Infinity;
+      } else if (!options.join) {
         setSpotifyMessage(`Starting the song on ${sourceName(link.uri)}...`);
         window.app.spotify
           .play(link.uri, Math.max(0, songStartMs - countInMs))
@@ -780,20 +1194,36 @@ const RhythmGame: React.FC = () => {
     let timer: ReturnType<typeof setTimeout> | undefined;
     // since when Spotify has not been playing the song (0: it plays it)
     let idleSince = 0;
+    // just started: Spotify is given a moment to seek and play (asked often, no "paused" yet)
+    const startedAt = Date.now();
+    const settling = () => Date.now() - startedAt < 8000;
+    // a button moved the song: what Spotify tells is followed until then (Date.now())
+    let followUntil = 0;
+    // when a button asked to check it (Date.now(); a poll on its way does not put it off)
+    let checkAt = 0;
     const next = (ms: number) => {
+      if (timer) clearTimeout(timer);
+      const wait = checkAt > Date.now() ? Math.min(ms, checkAt - Date.now()) : ms;
       // (the next poll, defined just below)
       // eslint-disable-next-line no-use-before-define
-      if (!stopped) timer = setTimeout(poll, ms);
+      if (!stopped) timer = setTimeout(poll, wait);
+    };
+    checkRecordingSoon.current = (afterMs: number) => {
+      checkAt = Date.now() + afterMs;
+      followUntil = checkAt + 3000;
+      next(afterMs);
     };
     const poll = async () => {
       // hidden: nothing asked (the game goes on by itself)
-      if (document.visibilityState !== 'visible') {
+      // waiting on a note (the recording was stopped by the game), or just started again: what
+      // it tells is not followed, nor is it idle
+      if (document.visibilityState !== 'visible' || performance.now() < holdPollUntil.current) {
         next(SPOTIFY_POLL_MS);
         return;
       }
       let player: Awaited<ReturnType<typeof window.app.spotify.player>>;
       try {
-        player = await window.app.spotify.player();
+        player = await window.app.spotify.player(spotifyLinkRef.current?.uri);
       } catch (e) {
         if (stopped) return;
         const text = errorText(e);
@@ -805,7 +1235,7 @@ const RhythmGame: React.FC = () => {
       }
       if (stopped) return;
       setSpotifyError('');
-      const where = sourceName(spotifyLinkRef.current?.uri);
+      const where = player ? sourceName(player.track.uri) : sourceName(spotifyLinkRef.current?.uri);
       const isSong = !!player && isLinkedSong(player.track, spotifyLinkRef.current);
       if (!player) {
         spotifyPlayer.current = null;
@@ -813,14 +1243,36 @@ const RhythmGame: React.FC = () => {
       } else {
         if (player.volumePercent !== null) setSpotifyVolume(player.volumePercent);
         if (isSong && player.track.imageUrl) setSeenArt(player.track.imageUrl);
+        // the moment Spotify measured it, on this page's clock
+        const at = performance.now() - (Date.now() - player.measuredAt);
+        let { progressMs } = player;
+        // just checking (it plays on as followed): the game's own clock is kept, unless
+        // Spotify is far from it (moved in Spotify)
+        const before = spotifyPlayer.current;
+        if (
+          !settling() &&
+          Date.now() > followUntil &&
+          isSong &&
+          player.isPlaying &&
+          before?.isSong &&
+          before.isPlaying
+        ) {
+          const expected = before.progressMs + (at - before.at) * before.rate;
+          if (Math.abs(progressMs - expected) < CLOCK_JUMP_MS) progressMs = expected;
+        }
         spotifyPlayer.current = {
-          progressMs: player.progressMs,
-          // the moment Spotify measured it, on this page's clock
-          at: performance.now() - (Date.now() - player.measuredAt),
+          progressMs,
+          at,
           isPlaying: player.isPlaying,
           track: player.track,
           isSong,
+          rate: player.rate ?? 1,
         };
+        // the speed it really plays at (the game's windows follow it)
+        if (isSong && player.isPlaying && (player.rate ?? 1) !== rateRef.current) {
+          rateRef.current = player.rate ?? 1;
+          setRate(rateRef.current);
+        }
         if (!isSong) {
           const sameName = spotifyLinkRef.current?.name
             .toLowerCase()
@@ -831,7 +1283,19 @@ const RhythmGame: React.FC = () => {
               : `${where} plays ${player.track.name}, not this song`
           );
         } else if (!player.isPlaying) {
-          setSpotifyMessage(`${where} is paused`);
+          // started again on a note, but still paused: asked once more (else the game would
+          // stay stuck on it)
+          if (
+            phase === 'playing' &&
+            performance.now() < noJumpUntil.current &&
+            waitingRef.current === null &&
+            !detachedRef.current &&
+            !resumeRetried.current
+          ) {
+            resumeRetried.current = true;
+            resumeAt.current = recordingPositionAtRef.current(songTime.current);
+            resumeRecordingRef.current();
+          } else if (!settling()) setSpotifyMessage(`${where} is paused`);
         } else {
           setSpotifyMessage('');
         }
@@ -839,7 +1303,7 @@ const RhythmGame: React.FC = () => {
       // Spotify not playing the song: asked less often, and the run stops after a while
       if (isSong && player?.isPlaying) {
         idleSince = 0;
-        next(SPOTIFY_POLL_MS);
+        next(settling() || Date.now() < followUntil ? SPOTIFY_POLL_MS : SPOTIFY_CHECK_MS);
         return;
       }
       idleSince = idleSince || Date.now();
@@ -849,12 +1313,13 @@ const RhythmGame: React.FC = () => {
         setSpotifyMessage(`Stopped: ${where} was not playing the song`);
         return;
       }
-      next(SPOTIFY_IDLE_POLL_MS);
+      next(settling() ? 1000 : SPOTIFY_IDLE_POLL_MS);
     };
     poll();
     return () => {
       stopped = true;
       if (timer) clearTimeout(timer);
+      checkRecordingSoon.current = () => {};
     };
   }, [spotifyLinked, phase, calibrating]);
 
@@ -869,7 +1334,11 @@ const RhythmGame: React.FC = () => {
   const followSong = useCallback(
     async (song: ImportedSong, track: SpotifyTrack) => {
       if (!song.bpm) {
-        setFollowing({ track, song, error: 'it has no tempo: type it in the settings' });
+        setFollowing({
+          track,
+          song,
+          error: 'it has no tempo: type it in the settings',
+        });
         return;
       }
       setFollowing({ track, song, busy: 'Joining' });
@@ -916,17 +1385,23 @@ const RhythmGame: React.FC = () => {
   }, [joinSongId]);
 
   /** Following Spotify: the song it plays is imported (from Songsterr), then joined */
-  const importFollowed = async () => {
+  /** Imports the song followed: searched by its name, or from a tab's link pasted */
+  const importFollowed = async (link?: string) => {
     if (!following) return;
     const { track } = following;
     setFollowing({ track, busy: 'Importing' });
     try {
       const artist = track.artists.split(',')[0];
-      const result = await importSongFromWeb(`${track.name.replace(/\s+-\s+.*$/, '')} ${artist}`);
+      const result = await importSongFromWeb(
+        link ?? `${track.name.replace(/\s+-\s+.*$/, '')} ${artist}`
+      );
       const song: ImportedSong = { id: `imported-${Date.now()}`, ...result };
       await followSong(song, track);
     } catch (e) {
-      setFollowing({ track, error: `it could not be imported: ${errorText(e)}` });
+      setFollowing({
+        track,
+        error: `it could not be imported: ${errorText(e)}`,
+      });
     }
   };
 
@@ -934,12 +1409,12 @@ const RhythmGame: React.FC = () => {
    * Plays along with a track playing from a position (ms): joined there, or imported first when
    * it is not one of the songs (synced quickly first, when it can be)
    */
-  const playAlongWith = async (track: SpotifyTrack, positionMs: number) => {
+  const playAlongWith = async (track: SpotifyTrack, positionMs: number, known?: ImportedSong) => {
     setRecordingOff(false);
     // (when chosen in the settings)
     syncFirst.current =
       listenSync && gameSettings.syncBeforeJoin ? { uri: track.uri, positionMs } : null;
-    const song = findSongForTrack(customSongsRef.current, track);
+    const song = known ?? findSongForTrack(customSongsRef.current, track);
     if (song) {
       await followSong(song, track);
       return;
@@ -950,7 +1425,10 @@ const RhythmGame: React.FC = () => {
       const result = await importSongFromWeb(`${track.name.replace(/\s+-\s+.*$/, '')} ${artist}`);
       await followSong({ id: `imported-${Date.now()}`, ...result }, track);
     } catch (e) {
-      setFollowing({ track, error: `it could not be imported: ${errorText(e)}` });
+      setFollowing({
+        track,
+        error: `it could not be imported: ${errorText(e)}`,
+      });
     }
   };
 
@@ -986,23 +1464,47 @@ const RhythmGame: React.FC = () => {
   const nowPlayingSong = nowPlaying && findSongForTrack(gameSettings.customSongs ?? [], nowPlaying);
 
   /**
-   * A song typed by its name (or a YouTube link): played on YouTube (in the browser playing it,
-   * else a new tab) or on Spotify from its start, and played along with; or not played at all
-   * (the song is picked, or imported, and the game plays alone)
+   * A song typed by its name, or a link (YouTube, Spotify): played where it is chosen to play
+   * (whatever the link is from: a Spotify link plays on YouTube, the same song searched there,
+   * and the other way round): on YouTube (in the browser playing it, else a new tab) or on
+   * Spotify from its start, and played along with; or not played at all (the song is picked,
+   * or imported, and the game plays alone)
    */
   const playOn = gameSettings.playOn ?? 'youtube';
   const [typedSong, setTypedSong] = useState('');
   const [openingSong, setOpeningSong] = useState(false);
   const playByName = async () => {
-    const name = typedSong.trim();
+    const typed = typedSong.trim();
     setOpeningSong(true);
     setSpotifyError('');
     try {
+      // a link: the track or video it is (to play it as is, or to search its song elsewhere)
+      const isSpotifyLink = /open\.spotify\.com\/|spotify:track:/i.test(typed);
+      const isYouTubeLink = !isSpotifyLink && /youtube\.com\/|youtu\.be\//i.test(typed);
+      // another link: the page of a tab (Songsterr...), imported as it is
+      const isTabLink = !isSpotifyLink && !isYouTubeLink && /^https?:\/\//i.test(typed);
+      let linked: SpotifyTrack | null = null;
+      if (isSpotifyLink) linked = await window.app.spotify.track(typed);
+      else if (isYouTubeLink) linked = await window.app.youtube.video(typed);
+      let tab: ImportedSong | null = null;
+      if (isTabLink) {
+        setSpotifyMessage('Importing the tab...');
+        tab = { id: `imported-${Date.now()}`, ...(await importSongFromWeb(typed)) };
+        await updateSetting('rhythmGame.customSongs', [...customSongsRef.current, tab]);
+        setSpotifyMessage('');
+      }
+      // (what it is called: its song and artist)
+      let name = typed;
+      if (linked) name = `${linked.name} ${linked.artists.split(',')[0]}`.trim();
+      else if (tab) name = tab.title.replace(/\s+by\s+/i, ' ');
       if (playOn === 'none') {
-        let song = findSongByName(customSongsRef.current, name);
+        let song = tab ?? findSongByName(customSongsRef.current, name);
         if (!song) {
           setSpotifyMessage(`Importing ${name}...`);
-          song = { id: `imported-${Date.now()}`, ...(await importSongFromWeb(name)) };
+          song = {
+            id: `imported-${Date.now()}`,
+            ...(await importSongFromWeb(name)),
+          };
           await updateSetting('rhythmGame.customSongs', [...customSongsRef.current, song]);
         }
         setSpotifyMessage('');
@@ -1011,11 +1513,12 @@ const RhythmGame: React.FC = () => {
         setTypedSong('');
         return;
       }
-      const isLink = /^https?:\/\/|youtu\.?be/i.test(name);
       let track: SpotifyTrack | null;
-      if (playOn === 'spotify') track = await window.app.spotify.search(name);
-      else if (isLink) track = await window.app.youtube.video(name);
-      else track = await window.app.youtube.search(name);
+      if (playOn === 'spotify') {
+        track = isSpotifyLink ? linked : await window.app.spotify.search(name);
+      } else {
+        track = isYouTubeLink ? linked : await window.app.youtube.search(name);
+      }
       if (!track) throw new Error(`${name} was not found on ${sourceName(`${playOn}:`)}`);
       setFollowing({
         track,
@@ -1025,7 +1528,7 @@ const RhythmGame: React.FC = () => {
       setNowPlaying(track);
       setNowPaused(false);
       setTypedSong('');
-      await playAlongWith(track, 0);
+      await playAlongWith(track, 0, tab ?? undefined);
     } catch (e) {
       setFollowing(null);
       setSpotifyMessage('');
@@ -1169,6 +1672,8 @@ const RhythmGame: React.FC = () => {
     let durationMs = link.durationMs ?? 0;
     let heardUntil = 0;
     let stopped = '';
+    // answers in a row where Spotify did not play the song (one blip is not a pause)
+    let bad = 0;
     try {
       await listener.start(syncInput, link.uri);
       const { label } = listener;
@@ -1178,13 +1683,20 @@ const RhythmGame: React.FC = () => {
       await wait(HEAR_SETTLE_MS);
       while (!hearStop.current) {
         // eslint-disable-next-line no-await-in-loop
-        const player = await window.app.spotify.player().catch(spotifyBusyOrNull);
+        const player = await window.app.spotify.player(link.uri).catch(spotifyBusyOrNull);
         const at = player && performance.now() - (Date.now() - player.measuredAt);
         const playing = !!player?.isPlaying && isLinkedSong(player.track, link);
         if (!player || at === null || !playing) {
           // the end of the song (Spotify stops, or plays the next one)
           if (starts.length && durationMs && heardUntil >= durationMs - 4000) break;
           if (starts.length) {
+            bad += 1;
+            if (bad < 3) {
+              // eslint-disable-next-line no-await-in-loop
+              await wait(HEAR_POLL_MS / 2);
+              // eslint-disable-next-line no-continue
+              continue;
+            }
             stopped = player?.isPlaying
               ? `${recordingSource} played another song`
               : `${recordingSource} was paused`;
@@ -1199,9 +1711,10 @@ const RhythmGame: React.FC = () => {
           // eslint-disable-next-line no-continue
           continue;
         }
+        bad = 0;
         durationMs = player.track.durationMs || durationMs;
         const startedAt = at - player.progressMs;
-        if (starts.length >= 4 && Math.abs(startedAt - startAt()) > HEAR_MOVED_MS) {
+        if (starts.length >= 4 && Math.abs(startedAt - startAt()) > HEAR_JUMP_MS) {
           stopped = `${recordingSource} was moved in the song`;
           break;
         }
@@ -1222,10 +1735,16 @@ const RhythmGame: React.FC = () => {
       const recordingStart = startAt();
       const recording = {
         frames: listener.frames
-          .map((frame) => ({ positionMs: frame.at - recordingStart, chroma: frame.chroma }))
+          .map((frame) => ({
+            positionMs: frame.at - recordingStart,
+            chroma: frame.chroma,
+          }))
           .filter((frame) => frame.positionMs >= 0 && frame.positionMs <= heardUntil),
         onsets: listener.onsets
-          .map((onset) => ({ positionMs: onset.positionMs - recordingStart, value: onset.value }))
+          .map((onset) => ({
+            positionMs: onset.positionMs - recordingStart,
+            value: onset.value,
+          }))
           .filter((onset) => onset.positionMs >= 0 && onset.positionMs <= heardUntil),
         heardMs: heardUntil,
         durationMs: durationMs || heardUntil,
@@ -1233,7 +1752,11 @@ const RhythmGame: React.FC = () => {
       if (recording.frames.length < 200) {
         throw new Error('The song could not be heard: pick the sound input in the settings');
       }
-      setHearSync({ heardMs: heardUntil, durationMs, message: 'Lining up the song...' });
+      setHearSync({
+        heardMs: heardUntil,
+        durationMs,
+        message: 'Lining up the song...',
+      });
       // (the message shows before the work starts)
       await wait(50);
       const leadIn = round.rhythm.leadIn ?? 0;
@@ -1289,12 +1812,17 @@ const RhythmGame: React.FC = () => {
       new Promise((resolve) => {
         setTimeout(resolve, ms);
       });
-    const median = (values: number[]) =>
-      [...values].sort((x, y) => x - y)[Math.floor(values.length / 2)];
     try {
+      // Spotify stopped or paused: it is started first (it fails to move in a song it does
+      // not play), and it tells the length of the song once it plays it. It plays before the
+      // listening starts: Spotify alone can only be heard once it makes a sound, else the whole
+      // computer is heard
+      setHearSync({ heardMs: 0, durationMs, part: 0, parts: 0 });
+      const started = await startSong(link, 0, () => hearStop.current);
       await listener.start(syncInput, link.uri);
       const { label } = listener;
-      durationMs = durationMs || ((await window.app.spotify.player())?.track.durationMs ?? 0);
+      setHearSync({ heardMs: 0, durationMs, label, part: 0, parts: 0 });
+      durationMs = durationMs || started.track.durationMs;
       if (!durationMs) throw new Error(`${recordingSource} did not give the length of the song`);
       const parts = Math.max(
         HEAR_PARTS_MIN,
@@ -1312,52 +1840,81 @@ const RhythmGame: React.FC = () => {
         // from the very start to a few seconds before the end
         const at = (part / (parts - 1)) * Math.max(0, durationMs - HEAR_PART_MS - 5000);
         setHearSync({ heardMs: at, durationMs, label, part: part + 1, parts });
+        // the seek is waited for: Spotify stalls and catches up after it, so this part is only
+        // collected once two answers in a row agree on when the song started (see startSong)
         // eslint-disable-next-line no-await-in-loop
-        await window.app.spotify.play(link.uri, at);
+        await startSong(link, at, () => hearStop.current);
         const askedAt = performance.now();
-        // eslint-disable-next-line no-await-in-loop
-        await wait(HEAR_SETTLE_MS);
         // when this part started (on this page's clock), from each answer of Spotify, and
         // from when to when it was heard
         const starts: number[] = [];
+        let restarts = 0;
+        // answers in a row where Spotify did not play the song (one blip is not a pause)
+        let bad = 0;
         let firstAt = 0;
         let lastAt = 0;
+        let lastProgress = -1;
+        // Spotify's position only lags (stale, in steps), never runs ahead: the truest start of
+        // the part is among the lowest ones (the 15th percentile, not the median)
+        const lowStart = () => [...starts].sort((x, y) => x - y)[Math.floor(starts.length * 0.15)];
         while (!hearStop.current && lastAt - firstAt < HEAR_PART_MS) {
           // eslint-disable-next-line no-await-in-loop
-          const player = await window.app.spotify.player().catch(spotifyBusyOrNull);
+          const player = await window.app.spotify.player(link.uri).catch(spotifyBusyOrNull);
           if (player?.isPlaying && isLinkedSong(player.track, link)) {
+            bad = 0;
             const pageAt = performance.now() - (Date.now() - player.measuredAt);
             const startedAt = pageAt - player.progressMs;
-            if (starts.length >= 3 && Math.abs(startedAt - median(starts)) > HEAR_MOVED_MS) {
-              throw new Error(`${recordingSource} was moved in the song`);
+            // moved ahead (the start is earlier than all before) or back (position went back)
+            const movedAhead = starts.length >= 4 && lowStart() - startedAt > HEAR_JUMP_MS;
+            const movedBack = lastProgress >= 0 && player.progressMs < lastProgress - 1000;
+            if (movedAhead || movedBack) {
+              // the position jumped (after a seek Spotify may stall or catch up): what this part
+              // collected is dropped and it is collected again from here, a few times at most
+              restarts += 1;
+              if (restarts > HEAR_RESTARTS) {
+                throw new Error(`${recordingSource} was moved in the song`);
+              }
+              starts.length = 0;
+              firstAt = 0;
+              lastAt = 0;
             }
+            lastProgress = player.progressMs;
             starts.push(startedAt);
             firstAt = firstAt || pageAt;
             lastAt = pageAt;
           } else if (starts.length) {
-            throw new Error(
-              player?.isPlaying
-                ? `${recordingSource} played another song`
-                : `${recordingSource} was paused`
-            );
+            bad += 1;
+            if (bad >= 3) {
+              throw new Error(
+                player?.isPlaying
+                  ? `${recordingSource} played another song`
+                  : `${recordingSource} was paused`
+              );
+            }
           } else if (performance.now() - askedAt > HEAR_START_MS) {
             throw new Error(`${recordingSource} did not play the song`);
           }
           // eslint-disable-next-line no-await-in-loop
-          await wait(HEAR_POLL_MS);
+          await wait(HEAR_PART_POLL_MS);
         }
         if (hearStop.current) throw new Error('Cancelled');
         // what was heard of this part (not the end of the part before it, still coming)
-        const partStart = median(starts);
+        const partStart = lowStart();
         recording.frames.push(
           ...listener.frames
             .filter((frame) => frame.at >= firstAt && frame.at <= lastAt)
-            .map((frame) => ({ positionMs: frame.at - partStart, chroma: frame.chroma }))
+            .map((frame) => ({
+              positionMs: frame.at - partStart,
+              chroma: frame.chroma,
+            }))
         );
         recording.onsets.push(
           ...listener.onsets
             .filter((onset) => onset.positionMs >= firstAt && onset.positionMs <= lastAt)
-            .map((onset) => ({ positionMs: onset.positionMs - partStart, value: onset.value }))
+            .map((onset) => ({
+              positionMs: onset.positionMs - partStart,
+              value: onset.value,
+            }))
         );
         recording.clips.push([firstAt - partStart, lastAt - partStart]);
         recording.heardMs = lastAt - partStart;
@@ -1367,7 +1924,11 @@ const RhythmGame: React.FC = () => {
       if (recording.frames.length < 200) {
         throw new Error('The song could not be heard: pick the sound input in the settings');
       }
-      setHearSync({ heardMs: 0, durationMs, message: 'Finding the parts in the song...' });
+      setHearSync({
+        heardMs: 0,
+        durationMs,
+        message: 'Finding the parts in the song...',
+      });
       // (the message shows before the work starts)
       await wait(50);
       const leadIn = round.rhythm.leadIn ?? 0;
@@ -1403,6 +1964,29 @@ const RhythmGame: React.FC = () => {
   };
 
   syncByPartsRef.current = syncByParts;
+
+  /**
+   * Quick sync from its buttons: Spotify starts the song by itself (see syncByParts), and when
+   * it is done (or failed, or was cancelled) Spotify plays again what it was playing, from where
+   * it was. Paused or stopped before: left paused.
+   */
+  const quickSync = async () => {
+    const link = round.song.imported?.spotify;
+    if (!link) return;
+    const before = await window.app.spotify.player(link.uri).catch(() => null);
+    const resume = before?.isPlaying
+      ? {
+          uri: before.track.uri,
+          positionMs: before.progressMs + Math.max(0, Date.now() - before.measuredAt),
+        }
+      : null;
+    await syncByParts();
+    if (resume) {
+      await window.app.spotify
+        .play(resume.uri, resume.positionMs)
+        .catch((e) => showSpotifyError(e, ': press play in Spotify to go on'));
+    }
+  };
 
   const tap = useCallback(() => {
     const player = spotifyPlayer.current;
@@ -1480,7 +2064,12 @@ const RhythmGame: React.FC = () => {
     setPhase('ready');
     synth.stopAll();
     setCalibrating(false);
-    if (spotifyOnRef.current) window.app.spotify.pause().catch(() => {});
+    holdPollUntil.current = 0;
+    if (spotifyOnRef.current) {
+      window.app.spotify.pause().catch(() => {});
+      // (and not left slowed down)
+      if (rateSupported.current) window.app.spotify.rate(1).catch(() => {});
+    }
   }, []);
 
   const record = useCallback((id: number, result: HitResult) => {
@@ -1503,11 +2092,18 @@ const RhythmGame: React.FC = () => {
     const tick = () => {
       const real = performance.now();
       const player = spotifyPlayer.current;
-      if (spotifyOnRef.current) {
-        // the song time follows Spotify (still while it has not started, or is paused)
-        if (player?.isPlaying && player.isSong) {
+      if (spotifyOnRef.current && detachedRef.current) {
+        // the recording is paused: the game plays the song by itself, slower
+        if (waitingRef.current === null) {
+          songTime.current += (real - lastReal.current) * rateRef.current;
+        }
+      } else if (spotifyOnRef.current) {
+        // the song time follows Spotify (still while it has not started, or is paused, or the
+        // game waits on a note: it stays on the note)
+        if (waitingRef.current === null && player?.isPlaying && player.isSong) {
           const { songStartMs, countInMs, runStartBeat } = spotifyTiming.current;
-          const progress = player.progressMs + (real - player.at);
+          // (slowed down: the recording moves less than the time that passes)
+          const progress = player.progressMs + (real - player.at) * player.rate;
           // where each beat is, when the whole recording was heard (else at the song's tempo)
           const beatMap = spotifyLinkRef.current?.beatTimes;
           const model = beatMap ? modelAt(beatMap, progress - syncShift.current) : null;
@@ -1515,8 +2111,10 @@ const RhythmGame: React.FC = () => {
             ? (beatsPerBar + beatAt(model, progress - syncShift.current) - runStartBeat) * beatMs
             : progress - (songStartMs + syncShift.current) + countInMs;
           const drift = target - songTime.current;
-          if (!spotifyTiming.current.synced || Math.abs(drift) > CLOCK_JUMP_MS) {
-            // started, or moved in Spotify: there at once
+          const resumed = real < noJumpUntil.current;
+          if (!spotifyTiming.current.synced || (Math.abs(drift) > CLOCK_JUMP_MS && !resumed)) {
+            // started, or moved in Spotify: there at once (not just after it started again on a
+            // note: what it tells is stale then)
             songTime.current = target;
             spotifyTiming.current.synced = true;
           } else {
@@ -1527,7 +2125,7 @@ const RhythmGame: React.FC = () => {
               -CLOCK_CATCH_UP,
               Math.min(CLOCK_CATCH_UP, drift / CLOCK_CATCH_UP_MS)
             );
-            songTime.current += (real - lastReal.current) * pace * (1 + catchUp);
+            songTime.current += (real - lastReal.current) * pace * player.rate * (1 + catchUp);
           }
         }
       } else if (waitingRef.current === null) {
@@ -1545,8 +2143,9 @@ const RhythmGame: React.FC = () => {
         partCursor.current = next === -1 ? events.length : next;
         sounded.current = new Set(hitsRef.current.filter((h) => h.time < t).map((h) => h.id));
         lastBeat.current = Math.floor(t / beatMs);
-        // moved back: the chords coming again can be played again
-        if (t < lastSongTime.current) {
+        // moved back (a seek, a section again): the chords coming again can be played again (a
+        // small correction keeps what was played)
+        if (t < lastSongTime.current - REPLAY_BACK_MS) {
           setHits((current) =>
             // (listening: only the chords still to come, the others are not played again)
             current.map((h) =>
@@ -1555,7 +2154,7 @@ const RhythmGame: React.FC = () => {
                 : h
             )
           );
-        } else {
+        } else if (t > lastSongTime.current) {
           // moved ahead (joined in the middle, or Spotify moved on): the chords passed are
           // skipped, not missed
           // (marked, not removed: listening may move the song back to them)
@@ -1567,16 +2166,22 @@ const RhythmGame: React.FC = () => {
       }
       lastSongTime.current = t;
 
-      // built-in sound (not while waiting for a missed chord)
+      // built-in sound (not while waiting on a note)
       if (waitingRef.current === null) {
         const beatNow = Math.floor(t / beatMs);
         // the count-in is always heard (its own volume), the click when it is on
-        const counting = beatNow >= 0 && beatNow < beatsPerBar;
+        const countBeat = beatNow - Math.round(countInFrom.current / beatMs);
+        const counting = countBeat >= 0 && countBeat < beatsPerBar;
         if ((counting || sound === 'click' || sound === 'both') && beatNow !== lastBeat.current) {
           lastBeat.current = beatNow;
-          synth.click(beatNow % beatsPerBar === 0, counting ? 'countIn' : 'click');
+          synth.click(
+            counting ? countBeat === 0 : beatNow % beatsPerBar === 0,
+            counting ? 'countIn' : 'click'
+          );
         }
-        const playsSong = listeningRef.current || sound === 'chords' || sound === 'both';
+        // (the recording paused: the game plays the song instead)
+        const playsSong =
+          listeningRef.current || sound === 'chords' || sound === 'both' || detachedRef.current;
         // the parts of the song: notes coming soon are scheduled on the audio clock
         if (playsSong) {
           const events = partEventsRef.current;
@@ -1611,7 +2216,18 @@ const RhythmGame: React.FC = () => {
             if (h.notes) {
               const played = playPartRef.current;
               if (t - h.time > 150 || heardPartsRef.current.includes(played)) return;
-              synth.play(h.notes, seconds, 95, 0, played as Channel);
+              // (a chord held for its strums: each strum is heard, on time)
+              const strums = [{ time: h.time, notes: h.notes }, ...(h.strums ?? [])];
+              strums.forEach((strum, i) => {
+                const end = strums[i + 1]?.time ?? h.time + h.length * beatMs;
+                synth.play(
+                  strum.notes,
+                  h.strums ? ((end - strum.time) / rateRef.current / 1000) * 0.85 : seconds,
+                  95,
+                  Math.max(0, (strum.time - t) / rateRef.current / 1000),
+                  played as Channel
+                );
+              });
               return;
             }
             if (t - h.time > 150 || (playsRhythmPartRef.current && !listeningRef.current)) return;
@@ -1631,19 +2247,79 @@ const RhythmGame: React.FC = () => {
       }
 
       // timing windows are real time: in song time they shrink when slowed down
-      const missed = listeningRef.current
-        ? []
-        : hitsRef.current.filter((h) => isOpen(h) && t > h.time + GOOD_MS * rateRef.current);
-      missed.forEach((h) => record(h.id, 'miss'));
-      if (missed.length && onMiss === 'wait' && waitingRef.current === null) {
-        // the song stops at the missed chord until it is played
-        waitingRef.current = missed[0].id;
-        setWaiting(missed[0].id);
-        songTime.current = missed[0].time + GOOD_MS * rateRef.current;
+      // (a recording that cannot be slowed down waits instead)
+      const mode = missMode(
+        onMiss,
+        spotifyOnRef.current,
+        rateSupported.current,
+        gamePlaysSlowerRef.current
+      );
+      // a note's keys pressed a little early (before it could be judged) and held into it: played
+      // when it comes (not by a key that played a note already)
+      if (!listeningRef.current && heldNotes.current.length) {
+        const early = EARLY_MS * rateRef.current;
+        const keysHeld = heldNotes.current;
+        const shift = strictShiftRef.current;
+        hitsRef.current
+          .filter((h) => h.notes && isOpen(h) && t >= h.time)
+          .forEach((h) => {
+            const notes = h.notes as number[];
+            const wanted = (m: number) =>
+              shift === null ? h.chromas.includes(m % 12) : notes.some((n) => n + shift === m);
+            const all =
+              shift === null
+                ? matchesChord(h.chromas, keysHeld)
+                : matchesNotes(
+                    notes.map((n) => n + shift),
+                    keysHeld
+                  );
+            const presses = keysHeld.filter(wanted).map((m) => keyPresses.current.get(m));
+            const fresh = presses.some((p) => p && !p.used && p.time >= h.time - early);
+            if (!all || !fresh) return;
+            presses.forEach((p) => {
+              if (p) p.used = true;
+            });
+            hitsRef.current = hitsRef.current.map((x) =>
+              x.id === h.id ? { ...x, result: 'good' } : x
+            );
+            record(h.id, 'good');
+            if (waitingRef.current === h.id) {
+              waitingRef.current = null;
+              setWaiting(null);
+              if (spotifyOnRef.current && !detachedRef.current) resumeRecordingRef.current();
+            }
+          });
       }
-      if (missed.length && onMiss === 'slowDown') {
-        rateRef.current = Math.max(0.5, rateRef.current * 0.9 ** missed.length);
-        setRate(rateRef.current);
+      // wait: the song stops on the note when it is not played, until it is (no miss). It
+      // stops once the note is late (played as late as a good hit, and as late as the playing
+      // reaches the game, it was in time), where it is (no jump back), and not when a chord is
+      // held already (pressed for it: not kept from the chord before; notes are pressed each)
+      if (mode === 'wait' && !listeningRef.current && waitingRef.current === null) {
+        const grace = (GOOD_MS + latencyRef.current) * rateRef.current;
+        const due = hitsRef.current.find((h) => isOpen(h) && t >= h.time + grace);
+        const held = heldNotes.current;
+        const holding = !!due && !due.notes && armed.current && matchesChord(due.chromas, held);
+        if (due && holding) {
+          armed.current = false;
+          hitsRef.current = hitsRef.current.map((h) =>
+            h.id === due.id ? { ...h, result: 'good' } : h
+          );
+          record(due.id, 'good');
+        } else if (due) {
+          waitingRef.current = due.id;
+          setWaiting(due.id);
+          // (a recording stops too, where it is: Spotify, YouTube; not when the game plays
+          // alone)
+          if (spotifyOnRef.current && !detachedRef.current) holdRecordingRef.current(t);
+        }
+      }
+      const missed =
+        listeningRef.current || mode === 'wait'
+          ? []
+          : hitsRef.current.filter((h) => isOpen(h) && t > h.time + GOOD_MS * rateRef.current);
+      missed.forEach((h) => record(h.id, 'miss'));
+      if (missed.length && mode === 'slowDown') {
+        setPlayRateRef.current(Math.max(MIN_RATE, rateRef.current * SLOW_DOWN ** missed.length));
       }
 
       // the song ends after its last chord and its last note
@@ -1655,7 +2331,10 @@ const RhythmGame: React.FC = () => {
       );
       if (last && t > end) {
         setPhase('done');
-        if (spotifyOnRef.current) window.app.spotify.pause().catch(() => {});
+        if (spotifyOnRef.current) {
+          window.app.spotify.pause().catch(() => {});
+          if (rateSupported.current) window.app.spotify.rate(1).catch(() => {});
+        }
         // played in time with the recording: chords played late mean it is later than thought
         const offset = medianOffset(hitOffsets.current);
         if (
@@ -1704,8 +2383,16 @@ const RhythmGame: React.FC = () => {
         if (event.key === '-' || event.key === '_') practiceKeys.current.changeSpeed(-5);
         if (event.key === '+' || event.key === '=') practiceKeys.current.changeSpeed(5);
       }
+      // back and ahead 5 s (held: again and again)
+      if (!typing && !listeningRef.current) {
+        if (event.key === 'ArrowLeft') practiceKeys.current.skipBy(-SKIP_MS);
+        if (event.key === 'ArrowRight') practiceKeys.current.skipBy(SKIP_MS);
+      }
       if (event.key.toLowerCase() === 'm' && !event.repeat && !typing) {
         setShowMixer((v) => !v);
+      }
+      if (event.key.toLowerCase() === 'v' && !event.repeat && !typing) {
+        practiceKeys.current.switchView();
       }
     };
     window.addEventListener('keydown', onKey);
@@ -1719,6 +2406,18 @@ const RhythmGame: React.FC = () => {
   useEffect(() => {
     const pressed = playedMidiNotes.filter((m) => !previousNotes.current.includes(m));
     previousNotes.current = playedMidiNotes;
+    // when each key held was pressed (the ones let go: forgotten)
+    [...keyPresses.current.keys()].forEach((m) => {
+      if (!playedMidiNotes.includes(m)) keyPresses.current.delete(m);
+    });
+    const heard = songTime.current - latencyRef.current * rateRef.current;
+    pressed.forEach((m) => keyPresses.current.set(m, { time: heard, used: false }));
+    // (the keys just pressed played a note: not again for the next one)
+    const spendPresses = () =>
+      pressed.forEach((m) => {
+        const press = keyPresses.current.get(m);
+        if (press) press.used = true;
+      });
     if (!playedMidiNotes.length) {
       armed.current = true;
       return;
@@ -1740,18 +2439,38 @@ const RhythmGame: React.FC = () => {
     const playsNotes = hitsRef.current.some((h) => h.notes);
     if (playsNotes ? !pressed.length : !armed.current) return;
     // a note is hit by a key just pressed, the other notes of the hit held
-    const matches = (h: Hit) =>
-      matchesChord(h.chromas, playedMidiNotes) &&
-      (!h.notes || pressed.some((m) => h.chromas.includes(m % 12)));
+    // (strict octaves: a part's notes where the keyboard shows them, moved by octaves)
+    const strictNotes = (h: Hit) => {
+      const shift = strictShiftRef.current;
+      return shift !== null && h.notes ? h.notes.map((m) => m + shift) : null;
+    };
+    const matches = (h: Hit) => {
+      const strict = strictNotes(h);
+      if (strict) {
+        return matchesNotes(strict, playedMidiNotes) && pressed.some((m) => strict.includes(m));
+      }
+      return (
+        matchesChord(h.chromas, playedMidiNotes) &&
+        (!h.notes || pressed.some((m) => h.chromas.includes(m % 12)))
+      );
+    };
 
-    // waiting for a missed chord: playing it starts the song again
+    // waiting on a note: playing it starts the song again
     if (waitingRef.current !== null) {
-      const missedHit = hitsRef.current.find((h) => h.id === waitingRef.current);
-      if (missedHit && matches(missedHit)) {
+      const waitedHit = hitsRef.current.find((h) => h.id === waitingRef.current);
+      if (waitedHit && matches(waitedHit)) {
         armed.current = false;
+        spendPresses();
         waitingRef.current = null;
         setWaiting(null);
         lastReal.current = performance.now();
+        // a recording goes on from the note (not when the game plays alone)
+        if (spotifyOnRef.current && !detachedRef.current) resumeRecordingRef.current();
+        // marked at once: the next frame must not see it as still open (and wait again)
+        hitsRef.current = hitsRef.current.map((h) =>
+          h.id === waitedHit.id ? { ...h, result: 'good' } : h
+        );
+        record(waitedHit.id, 'good');
       }
       return;
     }
@@ -1759,10 +2478,12 @@ const RhythmGame: React.FC = () => {
     // the playing reaches the game late: judged as played that much earlier
     const t = songTime.current - latencyRef.current * rateRef.current;
     const window = GOOD_MS * rateRef.current;
+    // the first one still open that the keys play (the same note again and again: the one
+    // due, not the next one)
     const target = hitsRef.current
-      .filter((h) => isOpen(h) && Math.abs(h.time - t) <= window)
-      .sort((a, b) => Math.abs(a.time - t) - Math.abs(b.time - t))[0];
-    if (!target || !matches(target)) return;
+      .filter((h) => isOpen(h) && Math.abs(h.time - t) <= window && matches(h))
+      .sort((a, b) => a.time - b.time)[0];
+    if (!target) return;
 
     // judged in real time
     const offset = (t - target.time) / rateRef.current;
@@ -1770,29 +2491,34 @@ const RhythmGame: React.FC = () => {
     if (result) {
       hitOffsets.current.push(offset);
       armed.current = false;
-      // every 4 hits in a row: back up to speed after slowing down, or faster when speeding up
+      spendPresses();
+      // every 4 hits in a row (6 after slowing down): back up to speed, or faster when speeding up
+      const recording = spotifyOnRef.current;
+      const slowsDown =
+        missMode(onMiss, recording, rateSupported.current, gamePlaysSlowerRef.current) ===
+        'slowDown';
       if ((comboRef.current + 1) % 4 === 0) {
-        const max = gameSettings.speedUp ? MAX_RATE : 1;
-        if (
-          !spotifyOnRef.current &&
-          rateRef.current < max &&
-          (onMiss === 'slowDown' || gameSettings.speedUp)
-        ) {
-          rateRef.current = Math.min(max, rateRef.current * SPEED_UP);
-          setRate(rateRef.current);
+        // back up to the speed asked (a recording is not sped up beyond it)
+        const max = gameSettings.speedUp && !recording ? MAX_RATE : baseRateRef.current;
+        if (rateRef.current < max && (slowsDown || (gameSettings.speedUp && !recording))) {
+          setPlayRateRef.current(Math.min(max, rateRef.current * SPEED_UP));
         }
       }
+      hitsRef.current = hitsRef.current.map((h) => (h.id === target.id ? { ...h, result } : h));
       record(target.id, result);
     }
   }, [playedMidiNotes, phase, record, onMiss, gameSettings.speedUp, calibrating, tap, listenTap]);
 
   const waitingHit = waiting !== null ? hits.find((h) => h.id === waiting) : undefined;
-  // the chord to play: the missed one while waiting, or the next one
+  // the note to play: the one waited on, or the next one
   const nextHit = waitingHit ?? hits.find(isOpen) ?? hits[hits.length - 1];
   const beat = Math.floor(now / beatMs);
-  // a bar is counted before the first chord
+  // a bar is counted before the first chord (and before a section jumped to)
+  const countBeat = beat - Math.round(countInFrom.current / beatMs);
   const countIn =
-    phase === 'playing' && beat >= 0 && beat < beatsPerBar ? beatsPerBar - beat : null;
+    phase === 'playing' && countBeat >= 0 && countBeat < beatsPerBar
+      ? beatsPerBar - countBeat
+      : null;
 
   const stats = useMemo(
     () => ({
@@ -1808,8 +2534,8 @@ const RhythmGame: React.FC = () => {
     if (phase !== 'done' || !practiceLoop || listeningRef.current) return undefined;
     const clean = stats.miss === 0;
     const timeout = setTimeout(() => {
-      const nextSpeed = practiceRamp && clean ? Math.min(100, speed + 5) : speed;
-      start(round, { speed: Math.max(speed, nextSpeed), loop: loop + 1 });
+      const nextSpeed = practiceRamp && clean ? Math.min(100, askedSpeed + 5) : askedSpeed;
+      start(round, { speed: Math.max(askedSpeed, nextSpeed), loop: loop + 1 });
     }, 1500);
     return () => clearTimeout(timeout);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1853,20 +2579,41 @@ const RhythmGame: React.FC = () => {
     setSpeed(nextSpeed);
     setHits(makeHits(round, runWindow(round, from, to, null), nextSpeed));
   };
-  /** Practice: slower or faster (5% steps): while playing, started again at that speed */
-  const changeSpeed = (delta: number) => {
-    if (spotifyOn) return;
-    const next = Math.min(150, Math.max(50, speed + delta));
-    if (next === speed) return;
+  // the recording cannot change speed (Spotify)
+  // (Spotify has no speed; YouTube can, through the extension)
+  const noRecordingSpeed =
+    spotifyOn && (!spotifyLink?.uri.startsWith('youtube:') || rateSupported.current === false);
+  const speedLocked = noRecordingSpeed && !gamePlaysSlower;
+  /**
+   * Practice: slower or faster (5% steps). While playing, the song goes on at that speed
+   * (slowed down by misses: from that speed); else the next run plays at it
+   */
+  const setAskedSpeed = (value: number) => {
+    if (speedLocked) return;
+    // (Spotify: slower only, the game playing the song)
+    const next = Math.min(noRecordingSpeed ? 100 : 150, Math.max(25, value));
     updateSetting('rhythmGame.practiceSpeed', next);
-    if (phase === 'playing') start(round, { speed: next });
-    else {
-      setSpeed(next);
-      setHits(makeHits(round, runWindow(round, range.first, range.last, bars), next));
+    if (phase !== 'playing') {
+      changePractice(range.first, range.last, next);
+      return;
     }
+    const base = next / speed;
+    // (slowed down by misses: as much slower than the new speed)
+    const nextRate = Math.min(base, (rateRef.current / baseRateRef.current) * base);
+    baseRateRef.current = base;
+    setBaseRate(base);
+    setPlayRate(nextRate);
   };
+  const changeSpeed = (delta: number) => setAskedSpeed(askedSpeed + delta);
   // (read by the keys)
-  practiceKeys.current = { restart: () => start(round), changeSpeed };
+  practiceKeys.current = {
+    restart: () => start(round),
+    changeSpeed,
+    // eslint-disable-next-line no-use-before-define
+    skipBy: (ms: number) => skipBy(ms),
+    switchView: () =>
+      updateSetting('rhythmGame.view', gameSettings.view === 'highway' ? 'lane' : 'highway'),
+  };
 
   /** Practice: bars of the sections picked (null: the whole sections) */
   const changeBars = (next: BarRange | null) => {
@@ -1894,13 +2641,20 @@ const RhythmGame: React.FC = () => {
         const beats = round.chords
           .slice(section.start, end)
           .reduce((sum, chord) => sum + (chord.beats ?? round.beatsPerBar), 0);
-        return { name: section.name, bars: Math.max(1, Math.round(beats / round.beatsPerBar)) };
+        return {
+          name: section.name,
+          bars: Math.max(1, Math.round(beats / round.beatsPerBar)),
+        };
       }),
     [round]
   );
 
   // switching to the whole song keeps the practice choice for coming back
-  const savedPractice = useRef<{ round: Round; first: number; last: number } | null>(null);
+  const savedPractice = useRef<{
+    round: Round;
+    first: number;
+    last: number;
+  } | null>(null);
   const changePracticing = (next: boolean) => {
     setPracticing(next);
     if (next) {
@@ -1919,12 +2673,9 @@ const RhythmGame: React.FC = () => {
       sections={sectionBars}
       first={range.first}
       last={range.last}
-      onRangeChange={(first, last) => changePractice(first, last, speed)}
-      speed={speed}
-      onSpeedChange={(value) => {
-        changePractice(range.first, range.last, value);
-        updateSetting('rhythmGame.practiceSpeed', value);
-      }}
+      onRangeChange={(first, last) => changePractice(first, last, askedSpeed)}
+      speed={askedSpeed}
+      onSpeedChange={setAskedSpeed}
       loop={!!gameSettings.practiceLoop}
       onLoopChange={(value) => updateSetting('rhythmGame.practiceLoop', value)}
       ramp={practiceRamp}
@@ -1932,7 +2683,7 @@ const RhythmGame: React.FC = () => {
       barRange={rangeBars}
       bars={bars}
       onBarsChange={changeBars}
-      speedLocked={spotifyOn}
+      speedLocked={speedLocked}
     />
   );
 
@@ -1993,7 +2744,9 @@ const RhythmGame: React.FC = () => {
         <button
           key={part}
           type="button"
-          className={cx('part', 'part--choice', { 'part--on': part === playingPart })}
+          className={cx('part', 'part--choice', {
+            'part--on': part === playingPart,
+          })}
           aria-pressed={part === playingPart}
           title={
             part === 'chords'
@@ -2020,12 +2773,20 @@ const RhythmGame: React.FC = () => {
     <Mixer
       channels={[
         // everything the game plays (not Spotify: its own volume, last)
-        { id: 'master', label: 'Master', value: soundVolume, apart: true, muted: masterMuted },
+        {
+          id: 'master',
+          label: 'Master',
+          value: soundVolume,
+          apart: true,
+          muted: masterMuted,
+        },
         {
           id: 'chords',
           label: 'Chords',
           value: volumes.chords,
           muted: !isHeard('chords'),
+          playable: playable.includes('chords'),
+          playing: playingPart === 'chords',
           ...instrumentPicker('chords'),
         },
         // every instrument of the song
@@ -2036,11 +2797,24 @@ const RhythmGame: React.FC = () => {
             label: partName(part),
             value: volumes[id] ?? OTHER_VOLUME,
             muted: !enabledParts.includes(id),
+            // any instrument of the song can be played: picked here, even while it plays
+            playable: playable.includes(id),
+            playing: playingPart === id,
             ...instrumentPicker(id as Channel),
           };
         }),
-        { id: 'click', label: 'Click', value: volumes.click, muted: !isHeard('click') },
-        { id: 'countIn', label: 'Count-in', value: volumes.countIn, muted: !isHeard('countIn') },
+        {
+          id: 'click',
+          label: 'Click',
+          value: volumes.click,
+          muted: !isHeard('click'),
+        },
+        {
+          id: 'countIn',
+          label: 'Count-in',
+          value: volumes.countIn,
+          muted: !isHeard('countIn'),
+        },
         // your keyboard, heard with Play My Notes
         ...(settings.general.playNotes
           ? [
@@ -2080,6 +2854,7 @@ const RhythmGame: React.FC = () => {
         }
         setHeard(id, !mute);
       }}
+      onPlay={(id) => updateSetting('rhythmGame.playPart', id)}
       onInstrument={(id, instrument) => {
         if (id === 'keyboard') updateSetting('general.keyboardInstrument', instrument);
         else
@@ -2154,19 +2929,43 @@ const RhythmGame: React.FC = () => {
     );
   };
 
+  // the songs, with their covers: one picked, or random songs
+  const [libraryOpen, setLibraryOpen] = useState(false);
+  const pickedSong = getAllSongs(gameSettings.customSongs ?? []).find((s) => s.id === chosenSong);
   const songPicker = (
-    <Select
+    <button
+      type="button"
       className={cx('songPicker')}
-      aria-label="Song to play"
-      options={[
-        { value: 'random', label: 'Random song' },
-        ...getAllSongs(gameSettings.customSongs ?? []).map((song) => ({
-          value: song.id,
-          label: song.title,
-        })),
-      ]}
-      onChange={(value) => updateSetting('rhythmGame.song', value === 'random' ? '' : value)}
-      value={chosenSong || 'random'}
+      onClick={() => setLibraryOpen(true)}
+      title="Your songs: pick one, search, remove"
+    >
+      {pickedSong ? (
+        <SongCover song={pickedSong.imported} title={pickedSong.title} small />
+      ) : (
+        <Icon name="music" />
+      )}
+      <span className={cx('songPickerName')}>
+        {pickedSong ? splitTitle(pickedSong.title).name : 'Random song'}
+      </span>
+      <small>Songs</small>
+    </button>
+  );
+  const songLibrary = libraryOpen && (
+    <SongLibrary
+      songs={gameSettings.customSongs ?? []}
+      chosen={chosenSong}
+      onPick={(id) => {
+        updateSetting('rhythmGame.song', id);
+        setLibraryOpen(false);
+      }}
+      onRemove={(id) => {
+        updateSetting(
+          'rhythmGame.customSongs',
+          (gameSettings.customSongs ?? []).filter((song) => song.id !== id)
+        );
+        if (chosenSong === id) updateSetting('rhythmGame.song', '');
+      }}
+      onClose={() => setLibraryOpen(false)}
     />
   );
 
@@ -2233,27 +3032,58 @@ const RhythmGame: React.FC = () => {
       return;
     }
     const target = Math.max(0, section.from - beatsPerBar * beatMs);
-    if (spotifyOnRef.current) {
-      const { songStartMs, countInMs, runStartBeat: runBeat } = spotifyTiming.current;
-      const beatMap = spotifyLinkRef.current?.beatTimes;
-      const position = beatMap
-        ? msOfBeat(beatMap, runBeat + target / beatMs - beatsPerBar) + syncShift.current
-        : target + songStartMs + syncShift.current - countInMs;
+    countInFrom.current = target;
+    // eslint-disable-next-line no-use-before-define
+    seekTo(target);
+  };
+
+  // where this run ends (song time, ms)
+  const runEndMs = timeline[range.last]?.to ?? 0;
+  /**
+   * The song goes to a time (ms, in this run), with the recording (Spotify, YouTube) when it
+   * plays it: not waiting on a note anymore
+   */
+  const seekTo = (ms: number) => {
+    if (phase !== 'playing') return;
+    const target = Math.min(Math.max(0, ms), runEndMs);
+    const wasWaiting = waitingRef.current !== null;
+    waitingRef.current = null;
+    setWaiting(null);
+    if (spotifyOnRef.current && !detachedRef.current) {
+      const position = recordingPositionAt(target);
+      // waiting on a note, the recording was paused: it plays again from there
+      if (wasWaiting) {
+        resumeAt.current = position;
+        resumeRecording();
+        return;
+      }
       // followed right away (Spotify tells where it is a moment later)
       if (spotifyPlayer.current) {
         spotifyPlayer.current = {
           ...spotifyPlayer.current,
-          progressMs: Math.max(0, position),
+          progressMs: position,
           at: performance.now(),
         };
       }
-      window.app.spotify.seek(Math.max(0, position)).catch((e) => showSpotifyError(e));
+      // (it tells the old place for a moment)
+      holdPollUntil.current = Math.max(holdPollUntil.current, performance.now() + 1500);
+      window.app.spotify.seek(position).catch((e) => showSpotifyError(e));
+      checkRecordingSoon.current(1600);
       return;
     }
     songTime.current = target;
     lastReal.current = performance.now();
-    waitingRef.current = null;
-    setWaiting(null);
+  };
+  /** Fast-forward or back (ms of the song) */
+  const skipBy = (ms: number) => seekTo(songTime.current + ms);
+  /** The time in this run (ms) at a beat of the song (from its start) */
+  const runMsAt = (songBeat: number) => (beatsPerBar + songBeat - runStartBeat) * beatMs;
+  // where the song is (a beat of the song, from its start) and the seek bar being dragged
+  const nowBeat = runStartBeat + now / beatMs - beatsPerBar;
+  const [seeking, setSeeking] = useState(false);
+  const seekBeatAt = (event: React.PointerEvent<HTMLDivElement>) => {
+    const rect = event.currentTarget.getBoundingClientRect();
+    return Math.min(1, Math.max(0, (event.clientX - rect.left) / rect.width)) * songBeats;
   };
 
   /** Practice markers: the sections from first to last are practiced (again and again) */
@@ -2282,61 +3112,130 @@ const RhythmGame: React.FC = () => {
     const found = sectionBeats.find((s) => atBeat < s.toBeat);
     return (found ?? sectionBeats[sectionBeats.length - 1])?.index ?? 0;
   };
+  const runFromBeat = sectionBeats[range.first]?.fromBeat ?? 0;
+  const runToBeat = sectionBeats[range.last]?.toBeat ?? songBeats;
   const player = sectionBeats.length > 0 && (
     <div className={cx('player')}>
-      <div
-        className={cx('timeline', { 'timeline--dragging': !!drag })}
-        role="group"
-        aria-label="Sections of the song: click to go there, drag to practice them"
-        onPointerDown={(event) => {
-          event.currentTarget.setPointerCapture(event.pointerId);
-          const index = sectionAt(event);
-          setDrag({ from: index, to: index });
-        }}
-        onPointerMove={(event) => {
-          if (!drag) return;
-          const index = sectionAt(event);
-          if (index !== drag.to) setDrag({ ...drag, to: index });
-        }}
-        onPointerUp={() => {
-          if (!drag) return;
-          setDrag(null);
-          if (drag.from === drag.to) goToSection(drag.from);
-          else markPractice(drag.from, drag.to);
-        }}
-        onPointerCancel={() => setDrag(null)}
-      >
-        {timeline.map((section) => {
-          const width = ((section.toBeat - section.fromBeat) / songBeats) * 100;
-          const inRun = section.index >= range.first && section.index <= range.last;
-          const done =
-            phase === 'playing' && inRun
-              ? Math.min(1, Math.max(0, (now - section.from) / (section.to - section.from)))
-              : 0;
-          const dragged =
-            drag &&
-            section.index >= Math.min(drag.from, drag.to) &&
-            section.index <= Math.max(drag.from, drag.to);
-          return (
+      {phase === 'playing' && (
+        <button
+          type="button"
+          className={cx('skip')}
+          onClick={() => skipBy(-SKIP_MS)}
+          title="Back 5 seconds (←)"
+          aria-label="Back 5 seconds"
+        >
+          −5s
+        </button>
+      )}
+      <div className={cx('playerTrack')}>
+        <div
+          className={cx('timeline', { 'timeline--dragging': !!drag })}
+          role="group"
+          aria-label="Sections of the song: click to go there, drag to practice them"
+          onPointerDown={(event) => {
+            event.currentTarget.setPointerCapture(event.pointerId);
+            const index = sectionAt(event);
+            setDrag({ from: index, to: index });
+          }}
+          onPointerMove={(event) => {
+            if (!drag) return;
+            const index = sectionAt(event);
+            if (index !== drag.to) setDrag({ ...drag, to: index });
+          }}
+          onPointerUp={() => {
+            if (!drag) return;
+            setDrag(null);
+            if (drag.from === drag.to) goToSection(drag.from);
+            else markPractice(drag.from, drag.to);
+          }}
+          onPointerCancel={() => setDrag(null)}
+        >
+          {timeline.map((section) => {
+            const width = ((section.toBeat - section.fromBeat) / songBeats) * 100;
+            const inRun = section.index >= range.first && section.index <= range.last;
+            const done =
+              phase === 'playing' && inRun
+                ? Math.min(1, Math.max(0, (now - section.from) / (section.to - section.from)))
+                : 0;
+            const dragged =
+              drag &&
+              section.index >= Math.min(drag.from, drag.to) &&
+              section.index <= Math.max(drag.from, drag.to);
+            return (
+              <div
+                key={section.index}
+                className={cx('segment', {
+                  'segment--now': section === currentSection,
+                  'segment--out': practicing && !inRun && !drag,
+                  'segment--marked': practicing && inRun && !drag,
+                  'segment--first': practicing && section.index === range.first && !drag,
+                  'segment--last': practicing && section.index === range.last && !drag,
+                  'segment--drag': dragged,
+                })}
+                style={{ width: `${width}%` }}
+                title={`${section.name}: click to go there, drag over sections to practice them`}
+              >
+                <div className={cx('segmentFill')} style={{ width: `${done * 100}%` }} />
+                {width >= 4 && <span className={cx('segmentName')}>{section.name}</span>}
+              </div>
+            );
+          })}
+        </div>
+        {phase === 'playing' && (
+          <div
+            className={cx('seekBar', { 'seekBar--seeking': seeking })}
+            role="slider"
+            tabIndex={-1}
+            aria-label="Where the song is: click or drag to go there"
+            aria-valuemin={0}
+            aria-valuemax={Math.round(songBeats)}
+            aria-valuenow={Math.round(nowBeat)}
+            title="Click or drag to go there (← → 5 seconds)"
+            onPointerDown={(event) => {
+              event.currentTarget.setPointerCapture(event.pointerId);
+              setSeeking(true);
+              seekTo(runMsAt(seekBeatAt(event)));
+            }}
+            onPointerMove={(event) => {
+              if (seeking) seekTo(runMsAt(seekBeatAt(event)));
+            }}
+            onPointerUp={() => setSeeking(false)}
+            onPointerCancel={() => setSeeking(false)}
+          >
             <div
-              key={section.index}
-              className={cx('segment', {
-                'segment--now': section === currentSection,
-                'segment--out': practicing && !inRun && !drag,
-                'segment--marked': practicing && inRun && !drag,
-                'segment--first': practicing && section.index === range.first && !drag,
-                'segment--last': practicing && section.index === range.last && !drag,
-                'segment--drag': dragged,
-              })}
-              style={{ width: `${width}%` }}
-              title={`${section.name}: click to go there, drag over sections to practice them`}
-            >
-              <div className={cx('segmentFill')} style={{ width: `${done * 100}%` }} />
-              {width >= 4 && <span className={cx('segmentName')}>{section.name}</span>}
-            </div>
-          );
-        })}
+              className={cx('seekRun')}
+              style={{
+                left: `${(runFromBeat / songBeats) * 100}%`,
+                width: `${((runToBeat - runFromBeat) / songBeats) * 100}%`,
+              }}
+            />
+            <div
+              className={cx('seekDone')}
+              style={{
+                left: `${(runFromBeat / songBeats) * 100}%`,
+                width: `${
+                  (Math.max(0, Math.min(nowBeat, runToBeat) - runFromBeat) / songBeats) * 100
+                }%`,
+              }}
+            />
+            <div
+              className={cx('seekHead')}
+              style={{ left: `${(Math.min(Math.max(nowBeat, 0), songBeats) / songBeats) * 100}%` }}
+            />
+          </div>
+        )}
       </div>
+      {phase === 'playing' && (
+        <button
+          type="button"
+          className={cx('skip')}
+          onClick={() => skipBy(SKIP_MS)}
+          title="Ahead 5 seconds (→)"
+          aria-label="Ahead 5 seconds"
+        >
+          +5s
+        </button>
+      )}
       {practicing && (
         <button
           type="button"
@@ -2355,6 +3254,313 @@ const RhythmGame: React.FC = () => {
   const chordsOfKey = useMemo(() => keyChords(round.keyLabel), [round.keyLabel]);
   const keyTonic = Note.chroma(Chord.get(chordsOfKey[0]?.name ?? '').tonic ?? '') ?? 0;
   const rootOf = (name: string) => Note.chroma(Chord.get(name).tonic ?? '') ?? -1;
+  /**
+   * Highway: a lane for each note the song plays (a chord: its root; notes: their lowest one),
+   * low to high like on the keyboard (chords: from the tonic up), named and numbered by its
+   * degree in the key (the notes out of the key too: ♭6...), colored like the degree it is on (or
+   * the one below it)
+   */
+  const keyRoots = chordsOfKey.map((c) => rootOf(c.name));
+  const aboveTonic = (chroma: number) => (((chroma - keyTonic) % 12) + 12) % 12;
+  const chromaOf = (hit: Hit) =>
+    hit.notes?.length ? Math.min(...hit.notes) % 12 : rootOf(hit.chord.tonic ?? hit.name);
+  const highwayLanes = useMemo(() => {
+    const names = new Map<number, string>();
+    // where the notes of each lane are played on the keyboard (MIDI)
+    const pitches = new Map<number, number[]>();
+    hits.forEach((h) => {
+      const chroma = chromaOf(h);
+      if (chroma < 0) return;
+      if (h.notes?.length)
+        pitches.set(chroma, [...(pitches.get(chroma) ?? []), Math.min(...h.notes)]);
+      if (names.has(chroma)) return;
+      // (a part's notes: the lowest one)
+      names.set(chroma, h.notes ? h.chord.notes[0] : h.chord.tonic ?? h.name);
+    });
+    // notes: low to high like on the keyboard (where they are mostly played); chords: from the
+    // tonic up
+    const middle = (chroma: number) => {
+      const played = [...(pitches.get(chroma) ?? [])].sort((a, b) => a - b);
+      return played.length ? played[Math.floor(played.length / 2)] : aboveTonic(chroma);
+    };
+    return [...names.entries()]
+      .sort(([a], [b]) => middle(a) - middle(b) || aboveTonic(a) - aboveTonic(b))
+      .map(([chroma, name]) => {
+        // the degree it is on, or the one below it
+        let degree = 0;
+        keyRoots.forEach((root, i) => {
+          if (aboveTonic(root) <= aboveTonic(chroma)) degree = i;
+        });
+        return {
+          chroma,
+          name,
+          number: SCALE_DEGREES[aboveTonic(chroma)],
+          outside: !keyRoots.includes(chroma),
+          hue: degreeHue(chordsOfKey[degree]?.numeral),
+        };
+      });
+    // (the lanes change with the song, the part played and the key)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hits, keyTonic, chordsOfKey]);
+  const laneCount = Math.max(1, highwayLanes.length);
+  // the lanes the keys held are on (lit at the bottom)
+  const heldChromas = new Set(playedMidiNotes.map((m) => m % 12));
+  // the highway is stretched out so that notes played close together are well apart (the
+  // closest ones but a few: a fast run does not stretch it all)
+  const closeGap = useMemo(() => {
+    const gaps = hits
+      .map((h) => h.length)
+      .filter((beats) => beats > 0)
+      .sort((a, b) => a - b);
+    return gaps[Math.floor(gaps.length * 0.2)] ?? 1;
+  }, [hits]);
+  const beatHeight = Math.min(
+    MAX_BEAT_HEIGHT,
+    Math.max(playsNotes ? BEAT_HEIGHT * 1.6 : BEAT_HEIGHT, HIGHWAY_GAP / closeGap)
+  );
+  const highwayVisible = hits.filter((h) => {
+    const beats = (h.time - now) / beatMs;
+    return beats + h.length > -1 && beats < (100 - HIGHWAY_LINE) / beatHeight;
+  });
+  // the fingers of a part's notes, worked out with the notes coming after them
+  // (both hands: each its own notes, the low ones for the left)
+  const partFingers = useMemo(
+    () => getHandsFingering(hits, getFingeringHands(gameSettings.fingering)),
+    [hits, gameSettings.fingering]
+  );
+  // a part's notes falling onto the keys of the keyboard under the highway (its notes where
+  // the song plays them): the keyboard stays where most of them are
+  // (whatever the keyboard octave: the keyboard shows all the part's notes where they are, so
+  // none is moved to another octave; − and + move them all by octaves)
+  const keyLanes = gameSettings.view === 'highway' && !!gameSettings.learningMode && playsNotes;
+  // (a keyboard staying in one octave: the song's own octaves; on the highway's keys: as shown)
+  strictShiftRef.current = gameSettings.strictOctaves
+    ? 12 *
+      (gameSettings.keyboardOctave === 'fixed' && !keyLanes
+        ? 0
+        : gameSettings.keyboardTranspose ?? 0)
+    : null;
+  const keysTranspose = 12 * (gameSettings.keyboardTranspose ?? 0);
+  // the keys shown: the player's keyboard (each key on screen the one under the hand), or the
+  // octaves the part's notes are in (most: the ones with the most notes); the notes outside them
+  // moved into them by octaves
+  const keyboardKeys = gameSettings.keyboardKeys ?? 'fit';
+  const keysRange = useMemo(() => {
+    if (keyboardKeys !== 'fit') {
+      const [low, high] = KEYBOARD_SIZES[keyboardKeys];
+      return { low, high };
+    }
+    const notes = hits.flatMap((h) => h.notes ?? []).map((m) => m + keysTranspose);
+    if (!notes.length) return { low: 60, high: 83 };
+    const lowest = Math.floor(Math.min(...notes) / 12);
+    const highest = Math.floor(Math.max(...notes) / 12);
+    const octaves = Math.max(2, Math.min(MAX_KEY_OCTAVES, highest - lowest + 1));
+    let firstOctave = lowest;
+    let most = -1;
+    for (let from = lowest; from <= Math.max(lowest, highest - octaves + 1); from += 1) {
+      const count = notes.filter((m) => m >= 12 * from && m < 12 * (from + octaves)).length;
+      if (count > most) {
+        most = count;
+        firstOctave = from;
+      }
+    }
+    return { low: 12 * firstOctave, high: 12 * (firstOctave + octaves) - 1 };
+  }, [hits, keysTranspose, keyboardKeys]);
+  const keysLow = keysRange.low;
+  const keysHigh = keysRange.high;
+  // white keys from C0, to each white key (a black key: the white key below it)
+  const whiteOf = (m: number) =>
+    7 * Math.floor(m / 12) + (WHITE_INDEX[m % 12] ?? WHITE_INDEX[(m % 12) - 1]);
+  const whiteKeys = whiteOf(keysHigh) - whiteOf(keysLow) + 1;
+  /** Where a note falls on the keyboard (percent): its key, moved into the keyboard by octaves */
+  const keyPlace = (midi: number) => {
+    let m = midi + keysTranspose;
+    while (m < keysLow) m += 12;
+    while (m > keysHigh) m -= 12;
+    const chroma = m % 12;
+    const white = 100 / whiteKeys;
+    const index = whiteOf(m) - whiteOf(keysLow);
+    if (WHITE_INDEX[chroma] !== undefined) {
+      return { left: index * white, width: white, black: false };
+    }
+    // a black key: about on the line between the white keys around it (like the keyboard draws
+    // it: 24 of 41 wide, moved a little toward the outside of its group)
+    const center = (index + 1 + BLACK_SHIFT[chroma]) * white;
+    return { left: center - white * BLACK_WIDTH, width: white * 2 * BLACK_WIDTH, black: true };
+  };
+  const heldKeys = new Set(playedMidiNotes.map((m) => keyPlace(m - keysTranspose).left));
+  // the note just played right (before the next one): its keys still held are not wrong
+  const beforeNext = hits[hits.indexOf(nextHit) - 1];
+  const justPlayed =
+    beforeNext && (beforeNext.result === 'perfect' || beforeNext.result === 'good')
+      ? { chromas: beforeNext.chromas, notes: beforeNext.notes }
+      : undefined;
+  // the next note's lane: its keys colored like it
+  const nextLane = nextHit && highwayLanes.find((lane) => lane.chroma === chromaOf(nextHit));
+  // the keyboard of the learning mode (in the highway view: under the road, as wide)
+  const keyboard = gameSettings.learningMode && nextHit && phase === 'playing' && (
+    <ChordQuizKeyboard
+      target={nextHit.chord}
+      keyName={key}
+      sharps={accidentals === 'sharp'}
+      fingering={gameSettings.fingering}
+      playedMidiNotes={playedMidiNotes}
+      sustainedMidiNotes={sustainedMidiNotes}
+      strictOctaves={!!gameSettings.strictOctaves}
+      midiNotes={midiNotes}
+      fixedOctaveShift={
+        gameSettings.keyboardOctave === 'fixed' ? gameSettings.keyboardOctaveShift ?? 0 : undefined
+      }
+      // notes of a part: where the song plays them (moved by octaves); on the highway's keys,
+      // whatever the keyboard octave (staying in one: − and + move it)
+      songNotes={
+        (gameSettings.keyboardOctave ?? 'song') === 'song' || keyLanes ? nextHit.notes : undefined
+      }
+      transpose={keysTranspose / 12}
+      onTransposeChange={(octaves) => updateSetting('rhythmGame.keyboardTranspose', octaves)}
+      songFingers={partFingers.get(nextHit.id)}
+      targetColor={nextLane && `hsl(${nextLane.hue} 62% 44%)`}
+      songRange={keyLanes ? keysRange : undefined}
+      partNotes={nextHit.notes}
+      justPlayed={justPlayed}
+      onFixedOctaveShiftChange={(shift) => updateSetting('rhythmGame.keyboardOctaveShift', shift)}
+    />
+  );
+  const highway = (
+    <div className={cx('highway', { 'highway--wide': keyLanes && whiteKeys > 28 })}>
+      <div className={cx('highwayRoad')}>
+        {/* the keys of the keyboard below (a part's notes fall onto them) */}
+        {keyLanes &&
+          Array.from({ length: keysHigh - keysLow + 1 }, (_, i) => keysLow + i).map((midi) => {
+            const place = keyPlace(midi - keysTranspose);
+            return (
+              <div
+                key={midi}
+                className={cx('highwayKey', {
+                  'highwayKey--black': place.black,
+                  'highwayKey--held': heldKeys.has(place.left),
+                  // (a C: an octave starts there)
+                  'highwayKey--octave': midi % 12 === 0 && midi !== keysLow,
+                })}
+                style={{ left: `${place.left}%`, width: `${place.width}%` }}
+              />
+            );
+          })}
+        {!keyLanes &&
+          highwayLanes.map((lane) => (
+            <div
+              key={lane.chroma}
+              className={cx('highwayLane', {
+                'highwayLane--held': heldChromas.has(lane.chroma),
+              })}
+              style={{ '--hue': lane.hue } as React.CSSProperties}
+            />
+          ))}
+        {/* a line on each bar */}
+        {Array.from(
+          { length: Math.ceil((100 - HIGHWAY_LINE) / beatHeight / beatsPerBar) + 2 },
+          (_, i) => {
+            const bar = Math.floor(now / beatMs / beatsPerBar) + i;
+            const bottom =
+              HIGHWAY_LINE + ((bar * beatsPerBar * beatMs - now) / beatMs) * beatHeight;
+            return bottom > -5 && bottom < 105 ? (
+              <div key={bar} className={cx('highwayBar')} style={{ bottom: `${bottom}%` }} />
+            ) : null;
+          }
+        )}
+        <div className={cx('highwayLine')} style={{ bottom: `${HIGHWAY_LINE}%` }} />
+        {highwayVisible.flatMap((h) => {
+          const index = highwayLanes.findIndex((lane) => lane.chroma === chromaOf(h));
+          const lane = highwayLanes[index];
+          if (!lane) return [];
+          // named when it changes (the same note again and again: once)
+          const before = hits[hits.findIndex((x) => x.id === h.id) - 1];
+          const named = !before || before.name !== h.name;
+          const next = h === nextHit && isOpen(h);
+          // (the next note waited on stays on the line, not past it)
+          const rise = ((h.time - now) / beatMs) * beatHeight;
+          const bottom = `calc(${HIGHWAY_LINE + (next ? Math.max(0, rise) : rise)}% - 0.7em)`;
+          const height = `calc(${Math.max(0, h.length * beatHeight - 0.6)}% + 0.7em)`;
+          // on the keys: a gem on each key of the notes, colored like the degree of each
+          if (keyLanes && h.notes) {
+            return h.notes.map((midi) => {
+              const place = keyPlace(midi);
+              const noteLane = highwayLanes.find((l) => l.chroma === midi % 12) ?? lane;
+              return (
+                <div
+                  key={`${h.id}-${midi}`}
+                  className={cx('gem', 'gem--key', h.result && `gem--${h.result}`, {
+                    'gem--next': next,
+                    'gem--skipped': h.skipped,
+                    'gem--outside': noteLane.outside,
+                  })}
+                  style={
+                    {
+                      left: `${place.left}%`,
+                      width: `${place.width}%`,
+                      bottom,
+                      height,
+                      '--hue': noteLane.hue,
+                    } as React.CSSProperties
+                  }
+                >
+                  {named && (
+                    <span className={cx('gemName')}>
+                      {formatSharpsFlats(
+                        Midi.midiToNoteName(midi, {
+                          sharps: accidentals === 'sharp',
+                          pitchClass: true,
+                        })
+                      )}
+                    </span>
+                  )}
+                </div>
+              );
+            });
+          }
+          return [
+            <div
+              key={h.id}
+              className={cx('gem', h.result && `gem--${h.result}`, {
+                'gem--next': next,
+                'gem--skipped': h.skipped,
+                'gem--outside': lane.outside,
+              })}
+              style={
+                {
+                  left: `${(index / laneCount) * 100}%`,
+                  width: `${100 / laneCount}%`,
+                  // its head centered on the line when it is to be played
+                  bottom,
+                  height,
+                  '--hue': lane.hue,
+                } as React.CSSProperties
+              }
+            >
+              {named && <span className={cx('gemName')}>{formatSharpsFlats(h.name)}</span>}
+            </div>,
+          ];
+        })}
+      </div>
+      {/* the targets: a lane each, lit by the keys held (on the keys: the keyboard is) */}
+      <div className={cx('highwayTargets', { 'highwayTargets--hidden': keyLanes })}>
+        {highwayLanes.map((lane) => (
+          <span
+            key={lane.chroma}
+            className={cx('highwayTarget', {
+              'highwayTarget--held': heldChromas.has(lane.chroma),
+              'highwayTarget--outside': lane.outside,
+            })}
+            style={{ '--hue': lane.hue } as React.CSSProperties}
+          >
+            <strong>{lane.number}</strong>
+            {formatSharpsFlats(lane.name)}
+          </span>
+        ))}
+      </div>
+      {keyboard && <div className={cx('highwayKeys')}>{keyboard}</div>}
+    </div>
+  );
   const keyStrip = (hit: Hit) => {
     // notes of a part: the degrees of the key they are on (by their root), the others apart
     if (hit.notes) {
@@ -2366,7 +3572,9 @@ const RhythmGame: React.FC = () => {
           {chordsOfKey.map((c, i) => (
             <span
               key={c.numeral}
-              className={cx('keyChord', { 'keyChord--on': hit.chromas.includes(roots[i]) })}
+              className={cx('keyChord', {
+                'keyChord--on': hit.chromas.includes(roots[i]),
+              })}
               style={{ '--hue': degreeHue(c.numeral) } as React.CSSProperties}
             >
               <span className={cx('keyChordNumeral')}>{i + 1}</span>
@@ -2383,7 +3591,7 @@ const RhythmGame: React.FC = () => {
               <span className={cx('keyChordNumeral')}>
                 {SCALE_DEGREES[(pc - keyTonic + 12) % 12]}
               </span>
-              {formatSharpsFlats(hit.name.split(' ').find((n) => Note.chroma(n) === pc) ?? '')}
+              {formatSharpsFlats(hit.chord.notes.find((n) => Note.chroma(n) === pc) ?? '')}
             </span>
           ))}
         </div>
@@ -2396,7 +3604,9 @@ const RhythmGame: React.FC = () => {
         {chordsOfKey.map((c) => (
           <span
             key={c.numeral}
-            className={cx('keyChord', { 'keyChord--on': sameChord(c.name, hit.name) })}
+            className={cx('keyChord', {
+              'keyChord--on': sameChord(c.name, hit.name),
+            })}
             style={{ '--hue': degreeHue(c.numeral) } as React.CSSProperties}
           >
             <span className={cx('keyChordNumeral')}>{c.numeral}</span>
@@ -2440,7 +3650,11 @@ const RhythmGame: React.FC = () => {
   const [showSync, setShowSync] = useState(false);
 
   // keys on the start and end screens: Enter starts, L listens, N plays the next song
-  const keyActions = useRef({ start: () => {}, listen: () => {}, next: () => {} });
+  const keyActions = useRef({
+    start: () => {},
+    listen: () => {},
+    next: () => {},
+  });
   keyActions.current = {
     start: () => start(),
     listen: () => start(round, { listen: true }),
@@ -2454,9 +3668,13 @@ const RhythmGame: React.FC = () => {
       if (target?.closest('input, select, textarea, button, [role="slider"], [role="listbox"]')) {
         return;
       }
-      const action = { Enter: 'start', l: 'listen', L: 'listen', n: 'next', N: 'next' }[
-        event.key
-      ] as keyof typeof keyActions.current | undefined;
+      const action = {
+        Enter: 'start',
+        l: 'listen',
+        L: 'listen',
+        n: 'next',
+        N: 'next',
+      }[event.key] as keyof typeof keyActions.current | undefined;
       if (!action) return;
       event.preventDefault();
       keyActions.current[action]();
@@ -2521,7 +3739,9 @@ const RhythmGame: React.FC = () => {
       )}
       <button
         type="button"
-        className={cx('spotifyButton', { 'spotifyButton--quiet': !!nowPlaying })}
+        className={cx('spotifyButton', {
+          'spotifyButton--quiet': !!nowPlaying,
+        })}
         onClick={checkSpotify}
         disabled={checking}
         title="Ask Spotify and your browser what they play now"
@@ -2550,7 +3770,11 @@ const RhythmGame: React.FC = () => {
                 choice.track.uri
               )}`}
             >
-              <span className={cx('followDot', { 'followDot--off': !choice.isPlaying })} />
+              <span
+                className={cx('followDot', {
+                  'followDot--off': !choice.isPlaying,
+                })}
+              />
               <small>{sourceName(choice.track.uri)}</small>
               <strong>{choice.track.name}</strong>
               <span>{choice.track.artists}</span>
@@ -2568,7 +3792,7 @@ const RhythmGame: React.FC = () => {
         <input
           value={typedSong}
           onChange={(event) => setTypedSong(event.target.value)}
-          placeholder="A song's name (or a YouTube link)"
+          placeholder="A song's name, or a YouTube, Spotify or Songsterr link"
           aria-label="A song to play"
         />
         <span className={cx('playOn')} role="radiogroup" aria-label="Play the recording on">
@@ -2604,7 +3828,9 @@ const RhythmGame: React.FC = () => {
         </span>
         <button
           type="submit"
-          className={cx('spotifyButton', { 'spotifyButton--youtube': playOn === 'youtube' })}
+          className={cx('spotifyButton', {
+            'spotifyButton--youtube': playOn === 'youtube',
+          })}
           disabled={!typedSong.trim() || openingSong}
           title={
             playOn === 'none'
@@ -2646,6 +3872,8 @@ const RhythmGame: React.FC = () => {
     </div>
   );
 
+  // a tab's link pasted, when the song was not found by its name
+  const [pastedTab, setPastedTab] = useState('');
   // playing along with what Spotify plays: joining it, importing it, or why it cannot
   const followLine = following && phase !== 'playing' && (
     <div className={cx('follow', 'follow--on')}>
@@ -2661,13 +3889,43 @@ const RhythmGame: React.FC = () => {
             {following.error && ` · ${following.error}`}
             {!following.song && !following.busy && !following.error && ' · not in your songs'}
           </span>
-          {!following.song && !following.busy && (
-            <Button size="sm" intent="primary" onClick={importFollowed}>
+          {!following.song && !following.busy && !following.error && (
+            <Button size="sm" intent="primary" onClick={() => importFollowed()}>
               <Icon name="plus" />
               Import and play
             </Button>
           )}
         </>
+      )}
+      {following && !following.song && following.error && !following.busy && (
+        // not found by its name: its tab found by the player, its link pasted
+        <form
+          className={cx('followPaste')}
+          onSubmit={(event) => {
+            event.preventDefault();
+            if (pastedTab.trim()) importFollowed(pastedTab.trim());
+          }}
+        >
+          <a
+            href={`https://www.songsterr.com/?pattern=${encodeURIComponent(
+              `${following.track.name} ${following.track.artists.split(',')[0]}`
+            )}`}
+            target="_blank"
+            rel="noreferrer"
+            title="Search for its tab on Songsterr, in your browser, then paste its link here"
+          >
+            Find it on Songsterr
+          </a>
+          <input
+            value={pastedTab}
+            onChange={(event) => setPastedTab(event.target.value)}
+            placeholder="Paste the tab's link"
+            aria-label="The link of the song's tab"
+          />
+          <Button size="sm" intent="primary" type="submit" disabled={!pastedTab.trim()}>
+            Import
+          </Button>
+        </form>
       )}
       <button
         type="button"
@@ -2728,7 +3986,7 @@ const RhythmGame: React.FC = () => {
           <Button
             size="sm"
             intent="primary"
-            onClick={syncByParts}
+            onClick={quickSync}
             disabled={hearing}
             title={`${recordingSource} plays a few parts of the song (about a minute) and the game finds them in the song: the beats between them are guessed at the tempo between them`}
           >
@@ -2764,7 +4022,7 @@ const RhythmGame: React.FC = () => {
               <Button
                 size="sm"
                 intent="neutral"
-                onClick={syncByParts}
+                onClick={quickSync}
                 disabled={hearing}
                 title={`${recordingSource} plays a few parts of the song (about a minute), the game finds them in the song`}
               >
@@ -2829,14 +4087,27 @@ const RhythmGame: React.FC = () => {
                 {beatsPerBar !== BEATS_PER_BAR && <span>{beatsPerBar}/4</span>}
                 {practicing && (
                   <span className={cx('tag', 'tag--practice')}>
-                    {sectionLabel} · {speed}%{practiceLoop && ` · loop ${loop + 1}`}
+                    {sectionLabel} · {askedSpeed}%{practiceLoop && ` · loop ${loop + 1}`}
                   </span>
                 )}
                 {listening && phase === 'playing' && (
                   <span className={cx('tag', 'tag--ok')}>listening</span>
                 )}
-                {rate < 1 && <span className={cx('tag', 'tag--warn')}>slowed down</span>}
-                {rate > 1 && <span className={cx('tag', 'tag--ok')}>sped up</span>}
+                {detached && phase === 'playing' && (
+                  <span className={cx('tag', 'tag--warn')}>
+                    {recordingSource} paused: the game plays it slower
+                  </span>
+                )}
+                {rate < baseRate - 0.001 && (
+                  <span className={cx('tag', 'tag--warn')}>
+                    slowed down · {Math.round(speed * rate)}%
+                  </span>
+                )}
+                {rate > baseRate + 0.001 && (
+                  <span className={cx('tag', 'tag--ok')}>
+                    sped up · {Math.round(speed * rate)}%
+                  </span>
+                )}
                 {round.noSongTempo && (
                   <span className={cx('tag', 'tag--warn')}>no tempo: set it in settings</span>
                 )}
@@ -2875,7 +4146,12 @@ const RhythmGame: React.FC = () => {
                     >
                       −
                     </button>
-                    <span className={cx({ speedSlow: speed < 100, speedFast: speed > 100 })}>
+                    <span
+                      className={cx({
+                        speedSlow: speed < 100,
+                        speedFast: speed > 100,
+                      })}
+                    >
                       {speed}%
                     </span>
                     <button
@@ -2975,6 +4251,16 @@ const RhythmGame: React.FC = () => {
                   </span>
                 )}
                 {nextHit && keyStrip(nextHit)}
+                {/* the chord the keys held make (the line kept: nothing moves when it shows) */}
+                <span className={cx('playedChord')}>
+                  {playedMidiNotes.length > 1 && playedChords[0] ? (
+                    <>
+                      You play <strong>{formatSharpsFlats(playedChords[0].symbol)}</strong>
+                    </>
+                  ) : (
+                    '\u00a0'
+                  )}
+                </span>
               </>
             )}
             {judgement && phase === 'playing' && (
@@ -3000,36 +4286,39 @@ const RhythmGame: React.FC = () => {
             ))}
           </div>
 
-          <div className={cx('lane')}>
-            <div className={cx('hitLine')} style={{ left: `${HIT_LINE}%` }} />
-            {judgement && judgement.result !== 'miss' && phase === 'playing' && (
-              <div
-                className={cx('hitFlash', `hitFlash--${judgement.result}`)}
-                style={{ left: `${HIT_LINE}%` }}
-                key={`flash-${judgement.id}`}
-              />
-            )}
-            {visible.map((h) => (
-              <div
-                key={h.id}
-                className={cx('block', h.result && `block--${h.result}`, {
-                  'block--next': h === nextHit && isOpen(h),
-                  'block--skipped': h.skipped,
-                  'block--repeat': !h.chordStart,
-                })}
-                style={
-                  {
-                    left: `${HIT_LINE + ((h.time - now) / beatMs) * beatWidth}%`,
-                    width: `${Math.max(2, h.length * beatWidth - 1)}%`,
-                    '--hue': degreeHue(h.numeral),
-                  } as React.CSSProperties
-                }
-              >
-                <span className={cx('blockName')}>{formatSharpsFlats(h.name)}</span>
-                {h.chordStart && <span className={cx('blockNumeral')}>{h.numeral}</span>}
-              </div>
-            ))}
-          </div>
+          {gameSettings.view === 'highway' && highway}
+          {gameSettings.view !== 'highway' && (
+            <div className={cx('lane')}>
+              <div className={cx('hitLine')} style={{ left: `${HIT_LINE}%` }} />
+              {judgement && judgement.result !== 'miss' && phase === 'playing' && (
+                <div
+                  className={cx('hitFlash', `hitFlash--${judgement.result}`)}
+                  style={{ left: `${HIT_LINE}%` }}
+                  key={`flash-${judgement.id}`}
+                />
+              )}
+              {visible.map((h) => (
+                <div
+                  key={h.id}
+                  className={cx('block', h.result && `block--${h.result}`, {
+                    'block--next': h === nextHit && isOpen(h),
+                    'block--skipped': h.skipped,
+                    'block--repeat': !h.chordStart,
+                  })}
+                  style={
+                    {
+                      left: `${HIT_LINE + ((h.time - now) / beatMs) * beatWidth}%`,
+                      width: `${Math.max(2, h.length * beatWidth - 1)}%`,
+                      '--hue': degreeHue(h.numeral),
+                    } as React.CSSProperties
+                  }
+                >
+                  <span className={cx('blockName')}>{formatSharpsFlats(h.name)}</span>
+                  {h.chordStart && <span className={cx('blockNumeral')}>{h.numeral}</span>}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
@@ -3075,7 +4364,8 @@ const RhythmGame: React.FC = () => {
                 </span>
                 <span>{Math.round((round.tempo * speed) / 100)} BPM</span>
                 <span>
-                  {round.sections.length} section{round.sections.length > 1 ? 's' : ''}
+                  {round.sections.length} section
+                  {round.sections.length > 1 ? 's' : ''}
                 </span>
                 {round.parts.length > 0 && (
                   <span>
@@ -3281,21 +4571,15 @@ const RhythmGame: React.FC = () => {
         </div>
       )}
 
-      {gameSettings.learningMode && nextHit && phase === 'playing' && (
-        <ChordQuizKeyboard
-          target={nextHit.chord}
-          keyName={key}
-          sharps={accidentals === 'sharp'}
-          fingering={gameSettings.fingering}
-          playedMidiNotes={playedMidiNotes}
-          sustainedMidiNotes={sustainedMidiNotes}
-          midiNotes={midiNotes}
-        />
-      )}
+      {gameSettings.view !== 'highway' && keyboard}
 
       {/* below the game, not over it */}
       {phase === 'playing' && (showMixer || listening) && (
-        <div className={cx('mixerDock', { 'mixerDock--float': showMixer && !listening })}>
+        <div
+          className={cx('mixerDock', {
+            'mixerDock--panel': showMixer && !listening,
+          })}
+        >
           {showMixer && !listening && (
             <button
               type="button"
@@ -3323,6 +4607,8 @@ const RhythmGame: React.FC = () => {
           </Button>
         </div>
       )}
+
+      {songLibrary}
     </div>
   );
 };

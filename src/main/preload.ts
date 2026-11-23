@@ -39,15 +39,20 @@ export const AppApi = {
     login: (clientId: string): Promise<void> => ipcRenderer.invoke('spotify:login', clientId),
     logout: (): Promise<void> => ipcRenderer.invoke('spotify:logout'),
     status: (): Promise<SpotifyStatus> => ipcRenderer.invoke('spotify:status'),
-    player: (): Promise<SpotifyPlayer | null> => ipcRenderer.invoke('spotify:player'),
+    player: (wantedUri?: string): Promise<SpotifyPlayer | null> =>
+      ipcRenderer.invoke('spotify:player', wantedUri),
     play: (uri: string, positionMs: number): Promise<void> =>
       ipcRenderer.invoke('spotify:play', uri, positionMs),
     pause: (): Promise<void> => ipcRenderer.invoke('spotify:pause'),
     seek: (positionMs: number): Promise<void> => ipcRenderer.invoke('spotify:seek', positionMs),
     search: (query: string): Promise<SpotifyTrack | null> =>
       ipcRenderer.invoke('spotify:search', query),
+    /** a track from its link (no login needed) */
+    track: (link: string): Promise<SpotifyTrack> => ipcRenderer.invoke('spotify:track', link),
     redirectUri: (): Promise<string> => ipcRenderer.invoke('spotify:redirectUri'),
     volume: (percent: number): Promise<void> => ipcRenderer.invoke('spotify:volume', percent),
+    /** the speed of what plays (1: real speed): false when it cannot change (Spotify) */
+    rate: (rate: number): Promise<boolean> => ipcRenderer.invoke('spotify:rate', rate),
     bars: (uri: string): Promise<number[] | null> => ipcRenderer.invoke('spotify:bars', uri),
     /** everything playing on Spotify and in the browsers (YouTube), to pick one */
     players: (): Promise<SpotifyPlayer[]> => ipcRenderer.invoke('spotify:players'),

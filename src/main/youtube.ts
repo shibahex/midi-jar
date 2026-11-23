@@ -152,6 +152,15 @@ export function findVideos(data: unknown, found: VideoRenderer[] = []) {
 const OTHER_VERSIONS =
   /\b(live|acoustic|remix|demo|instrumental|karaoke|cover|session|unplugged|sped up|slowed|reverb|tutorial|lesson|reaction|backing track)\b/i;
 
+/** The words of a text, lower case */
+const wordsOf = (text: string) =>
+  new Set(
+    text
+      .toLowerCase()
+      .split(/[^\p{L}\p{N}]+/u)
+      .filter(Boolean)
+  );
+
 /**
  * The studio recording of a song: its name first, then not a live (or covered...) version,
  * then the audio alone ("Official Audio", an artist's "- Topic" channel: no intro of a music
@@ -160,6 +169,7 @@ const OTHER_VERSIONS =
 export function pickVideo(query: string, videos: VideoRenderer[]) {
   const words = query.toLowerCase();
   const wantsOther = OTHER_VERSIONS.test(query);
+  const asked = [...wordsOf(query)].filter((word) => word !== 'by');
   const score = (video: VideoRenderer, index: number) => {
     const title = video.title?.runs?.map((part) => part.text).join('') ?? '';
     const channel = video.ownerText?.runs?.[0]?.text ?? '';
@@ -168,18 +178,32 @@ export function pickVideo(query: string, videos: VideoRenderer[]) {
       .name.toLowerCase()
       .replace(/\s*[([].*$/, '');
     const audioOnly = /official audio|\(audio\)/i.test(title) || /-\s*topic$/i.test(channel);
-    return (
-      (name && words.includes(name) ? 1000 : 0) -
-      (!wantsOther && OTHER_VERSIONS.test(title) ? 500 : 0) +
-      (audioOnly ? 200 : 0) -
-      index * 10
-    );
+    // how much of the song asked for the video is about (its title and channel): a video that
+    // only shares the artist's name ("Robin Callaway" for "... Liz Callaway") is not it
+    const heard = wordsOf(`${title} ${channel}`);
+    const named = asked.filter((word) => heard.has(word)).length / (asked.length || 1);
+    return {
+      named,
+      value:
+        (name && words.includes(name) ? 1000 : 0) +
+        named * 600 -
+        (!wantsOther && OTHER_VERSIONS.test(title) ? 500 : 0) +
+        (audioOnly ? 200 : 0) -
+        index * 10,
+    };
   };
   const scored = videos.map((video, index) => ({
     video,
-    value: score(video, index),
+    ...score(video, index),
   }));
-  return scored.reduce((a, b) => (b.value > a.value ? b : a), scored[0])?.video;
+  // (none has half of what was asked: not found, rather than another song)
+  const best = scored
+    .filter(({ named }) => named >= 0.5)
+    .reduce<(typeof scored)[number] | undefined>(
+      (a, b) => (!a || b.value > a.value ? b : a),
+      undefined
+    );
+  return best?.video ?? null;
 }
 
 /** The best video for a song name, or null */
@@ -238,11 +262,15 @@ type BrowserMedia = {
   positionMs: number;
   measuredAt: number;
   volume: number | null;
+  /** how fast it plays (1: the real speed; undefined: not told, and it cannot be changed) */
+  rate?: number;
   track: SpotifyTrack;
   play: () => Promise<unknown>;
   pause: () => Promise<unknown>;
   seek: (ms: number) => Promise<unknown>;
   setVolume: (percent: number) => Promise<unknown>;
+  /** only a tab of the extension can be slowed down */
+  setRate?: (rate: number) => Promise<unknown>;
 };
 
 const fromTab = (tab: BrowserTab): BrowserMedia => ({
@@ -251,11 +279,14 @@ const fromTab = (tab: BrowserTab): BrowserMedia => ({
   positionMs: tab.positionMs,
   measuredAt: tab.at,
   volume: null,
+  rate: tab.rate,
   track: remember(toTrack(tab.id, tab.title, tab.channel, tab.durationMs)),
   play: async () => controlTab(tab.key, 'play'),
   pause: async () => controlTab(tab.key, 'pause'),
   seek: async (ms) => controlTab(tab.key, 'seek', ms),
   setVolume: async () => undefined,
+  // (an extension from before the speed: it does not tell it, and cannot change it)
+  setRate: tab.rate === undefined ? undefined : async (rate) => controlTab(tab.key, 'rate', rate),
 });
 
 function fromSession(session: MediaSession): BrowserMedia {
@@ -313,6 +344,7 @@ const toPlayer = (media: BrowserMedia): SpotifyPlayer => ({
   progressMs: media.positionMs,
   measuredAt: media.measuredAt,
   volumePercent: media.volume,
+  rate: media.rate,
   track: media.track,
 });
 
@@ -412,4 +444,15 @@ export async function seek(positionMs: number) {
 export async function setVolume(percent: number) {
   const media = await followed();
   if (media) await media.setVolume(percent);
+}
+
+/**
+ * Sets the speed of the followed video (1: the real speed, the pitch kept). False when it cannot
+ * be changed: only the tabs of MIDI Jar's browser extension can.
+ */
+export async function setRate(rate: number) {
+  const media = await followed();
+  if (!media?.setRate) return false;
+  await media.setRate(rate);
+  return true;
 }

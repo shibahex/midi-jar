@@ -22,7 +22,8 @@ import {
 import { ImportedSong, SongPartRole } from 'main/types';
 
 import ToggleList, { useExcludedList } from '../ToggleList';
-import { SpotifySettings, SpotifySongLink } from './SpotifySettings';
+import SongLibrary from '../../RhythmGame/SongLibrary';
+import { SpotifySettings } from './SpotifySettings';
 import { fields } from './constants';
 
 import styles from '../ChordQuizSettings/ChordQuizSettings.module.scss';
@@ -118,36 +119,9 @@ const ImportSongs: React.FC<{ songs: ImportedSong[] }> = ({ songs }) => {
     }
   };
 
-  // the tempo of a song, typed in (empty: no tempo of its own)
-  const setTempo = (id: string, value: string) => {
-    const bpm = Math.round(Number(value));
-    updateSetting(
-      'rhythmGame.customSongs',
-      songs.map((song) => {
-        if (song.id !== id) return song;
-        const { bpm: _old, ...rest } = song;
-        return value && bpm > 0 ? { ...rest, bpm } : rest;
-      })
-    );
-  };
-
-  // the Spotify link of a song
-  const spotifyOn = !!settings.rhythmGame.spotifySync;
-  const setSpotify = (id: string, link: ImportedSong['spotify']) =>
-    updateSetting(
-      'rhythmGame.customSongs',
-      songs.map((song) => {
-        if (song.id !== id) return song;
-        const { spotify: _old, ...rest } = song;
-        return link ? { ...rest, spotify: link } : rest;
-      })
-    );
-
-  const remove = (id: string) =>
-    updateSetting(
-      'rhythmGame.customSongs',
-      songs.filter((song) => song.id !== id)
-    );
+  // the songs: picked, edited (tempo, link), removed (the song library of the game)
+  const [libraryOpen, setLibraryOpen] = useState(false);
+  const chosen = settings.rhythmGame.song ?? '';
 
   return (
     <div className={cx('import')}>
@@ -186,50 +160,27 @@ const ImportSongs: React.FC<{ songs: ImportedSong[] }> = ({ songs }) => {
           {text}
         </div>
       ))}
-      {songs.length > 0 && (
-        <ul className={cx('importedSongs')}>
-          {songs.map((song) => (
-            <li key={song.id}>
-              <span>
-                {song.title}{' '}
-                <small>
-                  ({song.chords.length} chords, key of {song.key}
-                  {song.beatsPerBar && song.beatsPerBar !== 4 ? `, ${song.beatsPerBar}/4` : ''}
-                  {song.parts?.length ? `, ${song.parts.length} parts` : ''}
-                  {song.chordsGuessed || song.chords.includes('N.C.')
-                    ? ', chords guessed from the notes'
-                    : ''}
-                  )
-                </small>
-              </span>
-              <span className={cx('songTempo')} title="Tempo of this song (beats per minute)">
-                <input
-                  type="number"
-                  min={1}
-                  placeholder="BPM?"
-                  aria-label={`Tempo of ${song.title}`}
-                  value={song.bpm ?? ''}
-                  onChange={(e) => setTempo(song.id, e.target.value)}
-                />
-                BPM
-              </span>
-              <Button
-                icon
-                size="sm"
-                variant="ghost"
-                intent="danger"
-                aria-label={`Remove ${song.title}`}
-                title="Remove"
-                onClick={() => remove(song.id)}
-              >
-                <Icon name="trash" />
-              </Button>
-              {spotifyOn && (
-                <SpotifySongLink song={song} onChange={(link) => setSpotify(song.id, link)} />
-              )}
-            </li>
-          ))}
-        </ul>
+      <Button intent="neutral" onClick={() => setLibraryOpen(true)}>
+        <Icon name="music" />
+        Songs{songs.length ? ` (${songs.length} of yours)` : ''}
+      </Button>
+      {libraryOpen && (
+        <SongLibrary
+          songs={songs}
+          chosen={chosen}
+          onPick={(id) => {
+            updateSetting('rhythmGame.song', id);
+            setLibraryOpen(false);
+          }}
+          onRemove={(id) => {
+            updateSetting(
+              'rhythmGame.customSongs',
+              songs.filter((song) => song.id !== id)
+            );
+            if (chosen === id) updateSetting('rhythmGame.song', '');
+          }}
+          onClose={() => setLibraryOpen(false)}
+        />
       )}
     </div>
   );
@@ -277,9 +228,20 @@ const RhythmGameSettings: React.FC = () => {
               The part you play, the volumes and the practice options are on the game screen.
             </div>
 
+            <FormField
+              label="Note View"
+              hint="The notes and chords scroll from right to left, or fall down a highway with a lane for each degree of the key (1 to 7, colored like the key's chords). V switches while playing"
+            >
+              <Select
+                options={fields.view.choices}
+                onChange={(value) => updateSetting('rhythmGame.view', value)}
+                value={game.view ?? 'lane'}
+              />
+            </FormField>
+
             <FormControlLabel
-              label="Show the Keys"
-              hint="A piano keyboard with the keys to play"
+              label="Practice Mode"
+              hint="A piano keyboard with the keys and fingering to play"
               reverse
             >
               <Switch
@@ -289,27 +251,84 @@ const RhythmGameSettings: React.FC = () => {
             </FormControlLabel>
 
             {game.learningMode && (
-              <>
-                <FormField label="Fingering" hint="Finger numbers (1 is the thumb, 5 the pinky)">
-                  <Select
-                    options={fields.fingering.choices}
-                    onChange={(value) => updateSetting('rhythmGame.fingering', value)}
-                    value={game.fingering}
-                  />
-                </FormField>
-
-                <FormField
-                  label="On a Miss"
-                  hint="Keep going, wait until it is played, or slow down (not with Spotify)"
-                >
-                  <Select
-                    options={fields.onMiss.choices}
-                    onChange={(value) => updateSetting('rhythmGame.onMiss', value)}
-                    value={game.onMiss ?? 'continue'}
-                  />
-                </FormField>
-              </>
+              <FormField label="Fingering" hint="Finger numbers (1 is the thumb, 5 the pinky)">
+                <Select
+                  options={fields.fingering.choices}
+                  onChange={(value) => updateSetting('rhythmGame.fingering', value)}
+                  value={game.fingering}
+                />
+              </FormField>
             )}
+
+            {game.learningMode && (
+              <FormField
+                label="Your Keyboard"
+                hint="The keys of your keyboard, so each key on screen (on the highway too) is the one under your hand: no guessing which octave. With octave buttons on your keyboard, keep them in the middle. Fit each song: the keys the song's notes are on"
+              >
+                <Select
+                  options={fields.keyboardKeys.choices}
+                  onChange={(value) => updateSetting('rhythmGame.keyboardKeys', value)}
+                  value={game.keyboardKeys ?? 'fit'}
+                />
+              </FormField>
+            )}
+
+            {game.learningMode && (
+              <FormField
+                label="Keyboard Octave"
+                hint="The notes of a part shown where the song plays them (− and + move them by octaves), the keyboard moving to the octave you play a whole chord in, or staying in one octave (moved with − and +). Chords follow you in the first mode. Any octave is fine to play in"
+              >
+                <Select
+                  options={fields.keyboardOctave.choices}
+                  onChange={(value) => updateSetting('rhythmGame.keyboardOctave', value)}
+                  value={game.keyboardOctave ?? 'song'}
+                />
+              </FormField>
+            )}
+
+            <FormField
+              label="Fast Repeated Chords"
+              hint="A chord struck again and again fast (a guitar strumming) is hard on a piano: held as one chord instead (struck again every 4 beats; every strum is still heard), or each one is struck. Single notes played again are always each played"
+            >
+              <Select
+                options={fields.repeatedNotes.choices}
+                onChange={(value) => updateSetting('rhythmGame.repeatedNotes', value)}
+                value={game.repeatedNotes ?? 'hold'}
+              />
+            </FormField>
+
+            <FormField
+              label="Play Songs On"
+              hint="Where a song typed or linked plays, whatever the link is from (a Spotify link plays on YouTube, and the other way round). Don't play: only pick the song, the game plays without the recording"
+            >
+              <Select
+                options={fields.playOn.choices}
+                onChange={(value) => updateSetting('rhythmGame.playOn', value)}
+                value={game.playOn ?? 'youtube'}
+              />
+            </FormField>
+
+            <FormField
+              label="On a Miss"
+              hint="Keep going, stop until the note is played, or slow down. With a recording, the song is paused (Spotify, YouTube) or slowed down (YouTube with the browser extension; Spotify: see below)"
+            >
+              <Select
+                options={fields.onMiss.choices}
+                onChange={(value) => updateSetting('rhythmGame.onMiss', value)}
+                value={game.onMiss ?? 'continue'}
+              />
+            </FormField>
+
+            <FormField
+              label="Slowing Down With Spotify"
+              hint="Spotify cannot play slower: it is paused and the game plays the song by itself, slower, then Spotify goes on where the game is once back to full speed. Or the game waits for the note instead"
+            >
+              <Select
+                options={fields.spotifySlowDown.choices}
+                onChange={(value) => updateSetting('rhythmGame.spotifySlowDown', value)}
+                value={game.spotifySlowDown ?? 'game'}
+              />
+            </FormField>
 
             <FormControlLabel
               label="Guessed Chords"
@@ -410,6 +429,17 @@ const RhythmGameSettings: React.FC = () => {
               <Switch
                 onChange={(value) => updateSetting('rhythmGame.speedUp', value)}
                 checked={!!game.speedUp}
+              />
+            </FormControlLabel>
+
+            <FormControlLabel
+              label="Strict Octaves"
+              hint="A part's notes count only in their own octave (where the keyboard shows them, moved with − and +), not in any octave"
+              reverse
+            >
+              <Switch
+                onChange={(value) => updateSetting('rhythmGame.strictOctaves', value)}
+                checked={!!game.strictOctaves}
               />
             </FormControlLabel>
 

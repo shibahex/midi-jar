@@ -1,6 +1,7 @@
 /**
  * MIDI Jar, in a YouTube tab: tells what the video of the tab is and where it is (often, and
- * at once when it plays, pauses or moves), and plays, pauses or moves it when MIDI Jar asks.
+ * at once when it plays, pauses or moves), and plays, pauses, moves or slows it down when MIDI Jar
+ * asks.
  */
 
 const api = globalThis.browser ?? globalThis.chrome;
@@ -47,6 +48,8 @@ function state() {
     ad,
     positionMs: Math.round(video.currentTime * 1000),
     durationMs: ad ? 0 : Math.round(video.duration * 1000),
+    // how fast it plays (1: the real speed)
+    rate: video.playbackRate,
     at: Date.now(),
   };
 }
@@ -56,7 +59,7 @@ function tell() {
 }
 
 setInterval(tell, EVERY_MS);
-['play', 'pause', 'seeked', 'loadedmetadata', 'ended'].forEach((event) =>
+['play', 'pause', 'seeked', 'ratechange', 'loadedmetadata', 'ended'].forEach((event) =>
   document.addEventListener(event, tell, true)
 );
 window.addEventListener('pagehide', () => {
@@ -69,5 +72,10 @@ api.runtime.onMessage.addListener((message) => {
   if (message.do === 'seek') video.currentTime = Math.max(0, message.ms) / 1000;
   if (message.do === 'play') video.play().catch(() => {});
   if (message.do === 'pause') video.pause();
+  if (message.do === 'rate') {
+    // (slowed down without changing the pitch)
+    video.preservesPitch = true;
+    video.playbackRate = Math.min(2, Math.max(0.25, Number(message.rate) || 1));
+  }
   tell();
 });

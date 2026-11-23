@@ -288,7 +288,7 @@ ipcMain.handle(
 );
 ipcMain.handle(
   'spotify:player',
-  spotifyCall(() => playback.getPlayer())
+  spotifyCall((wantedUri?: string) => playback.getPlayer(wantedUri))
 );
 ipcMain.handle(
   'spotify:play',
@@ -305,6 +305,10 @@ ipcMain.handle(
 ipcMain.handle(
   'spotify:search',
   spotifyCall((query: string) => spotify.search(query))
+);
+ipcMain.handle(
+  'spotify:track',
+  spotifyCall((link: string) => spotify.getTrack(link))
 );
 ipcMain.handle('spotify:redirectUri', () => spotify.SPOTIFY_REDIRECT_URI);
 
@@ -356,6 +360,10 @@ app.on('will-quit', () => {
 ipcMain.handle(
   'spotify:volume',
   spotifyCall((percent: number) => playback.setVolume(percent))
+);
+ipcMain.handle(
+  'spotify:rate',
+  spotifyCall((rate: number) => playback.setRate(rate))
 );
 ipcMain.handle(
   'spotify:bars',

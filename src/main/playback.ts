@@ -5,8 +5,9 @@ import * as youtube from './youtube';
 
 /**
  * Where songs play: Spotify, or YouTube in the browser (links "youtube:<id>"). The game asks one
- * player for all: a song plays where its link is from, and what plays is asked to the last one
- * used first, then to the other one when it plays nothing.
+ * player for all: a song plays where its link is from, and only that one is asked about it (a
+ * song on Spotify is never judged by a video in the browser, nor a video by Spotify). Asked
+ * without a song: the last one used first, then the other one when it plays nothing.
  * Spotify is asked to its app on this computer first (no limit of calls, no Premium needed),
  * else to the Web API (Spotify playing on another device).
  */
@@ -26,10 +27,14 @@ async function askSpotify(): Promise<SpotifyPlayer | null> {
 const ask = (source: Source): Promise<SpotifyPlayer | null> =>
   source === 'youtube' ? youtube.getPlayer() : askSpotify();
 
-export async function getPlayer() {
+/** Where a song's link is from */
+const sourceOf = (uri: string): Source => (youtube.isYouTubeUri(uri) ? 'youtube' : 'spotify');
+
+export async function getPlayer(wantedUri?: string) {
+  // a song: only where its link is from is asked
+  if (wantedUri) return ask(sourceOf(wantedUri));
   const player = await ask(active);
   if (player?.isPlaying) return player;
-  // (the other one cannot be asked: as the first one said)
   const other = await ask(active === 'youtube' ? 'spotify' : 'youtube').catch(() => null);
   return other?.isPlaying ? other : player;
 }
@@ -78,6 +83,15 @@ export async function setVolume(percent: number) {
   if (active === 'youtube') return youtube.setVolume(percent);
   if (await spotifyApp.setVolume(percent).catch(() => false)) return undefined;
   return spotify.setVolume(percent);
+}
+
+/**
+ * Sets the speed of what plays (1: the real speed). Only YouTube, through the browser extension,
+ * can be slowed down (Spotify has no speed): false when it cannot.
+ */
+export async function setRate(rate: number) {
+  if (active !== 'youtube') return false;
+  return youtube.setRate(rate);
 }
 
 /** Where the bars start (Spotify only: YouTube does not tell) */

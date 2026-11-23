@@ -333,6 +333,90 @@ $fs-body: clamp(13px, min(2.3vh, 1.9vw), 19px);
   width: min(100%, 1200px);
 }
 
+.playerTrack {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.skip {
+  flex-shrink: 0;
+  padding: 0.25em 0.6em;
+  border: 1px solid rgba($color-white, 0.2);
+  border-radius: 999px;
+  background: rgba($color-white, 0.06);
+  color: $color-white;
+  font: inherit;
+  font-size: $fs-small;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+
+  &:hover {
+    background: rgba($color-white, 0.14);
+  }
+}
+
+// where the song is: click or drag to go there (like a video's bar)
+.seekBar {
+  position: relative;
+  height: 14px;
+  cursor: pointer;
+  touch-action: none;
+  user-select: none;
+
+  // the track, thin, thicker on hover
+  &::before {
+    content: '';
+    position: absolute;
+    inset: 5px 0;
+    border-radius: 2px;
+    background: rgba($color-white, 0.12);
+    transition: inset 0.1s;
+  }
+
+  &:hover::before,
+  &--seeking::before {
+    inset: 4px 0;
+  }
+}
+
+.seekRun,
+.seekDone {
+  position: absolute;
+  top: 5px;
+  bottom: 5px;
+  border-radius: 2px;
+  pointer-events: none;
+}
+
+.seekRun {
+  background: rgba($color-white, 0.18);
+}
+
+.seekDone {
+  background: $color-primary-light;
+}
+
+.seekHead {
+  position: absolute;
+  top: 50%;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: $color-white;
+  box-shadow: 0 0 0 3px rgba($color-primary-light, 0.5);
+  transform: translate(-50%, -50%) scale(0.8);
+  transition: transform 0.1s;
+  pointer-events: none;
+
+  .seekBar:hover &,
+  .seekBar--seeking & {
+    transform: translate(-50%, -50%) scale(1);
+  }
+}
+
 .timeline {
   display: flex;
   flex: 1;
@@ -589,6 +673,18 @@ $fs-body: clamp(13px, min(2.3vh, 1.9vw), 19px);
   opacity: 0.6;
 }
 
+// the chord the keys held make
+.playedChord {
+  margin-top: 0.4em;
+  font-size: $fs-small;
+  opacity: 0.8;
+
+  strong {
+    font-size: 1.25em;
+    color: $color-primary-light;
+  }
+}
+
 .countIn {
   font-size: clamp(48px, min(14vh, 10vw), 140px);
   font-weight: bold;
@@ -687,6 +783,243 @@ $fs-body: clamp(13px, min(2.3vh, 1.9vw), 19px);
 
   &--good {
     background: rgba($color-primary-light, 0.5);
+  }
+}
+
+// highway: the notes fall down a road tilted away, a lane for each degree of the key
+.highway {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: min(100%, 720px);
+
+  // a big keyboard's keys: wider
+  &--wide {
+    width: min(100%, 1200px);
+  }
+  perspective: 900px;
+  perspective-origin: 50% 0%;
+}
+
+.highwayRoad {
+  position: relative;
+  display: flex;
+  width: 100%;
+  height: min(52vh, 560px);
+  border: 1px solid rgba($color-white, 0.1);
+  border-radius: 0.6em 0.6em 0 0;
+  background: linear-gradient(180deg, rgba($color-black, 0.15), rgba($color-black, 0.55));
+  box-shadow: inset 0 2px 30px rgba($color-black, 0.5);
+  overflow: hidden;
+  transform: rotateX(28deg);
+  transform-origin: 50% 100%;
+  // (the far end fades out)
+  mask-image: linear-gradient(0deg, #000 70%, transparent);
+}
+
+.highwayLane {
+  --hue: 215;
+  flex: 1;
+  border-right: 1px solid rgba($color-white, 0.06);
+  transition: background 0.08s;
+
+  &--held {
+    background: linear-gradient(0deg, hsl(var(--hue) 70% 50% / 0.35), transparent 60%);
+  }
+}
+
+// a key of the keyboard below, on the road (a part's notes fall onto it)
+.highwayKey {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  box-sizing: border-box;
+  border-right: 1px solid rgba($color-white, 0.07);
+  transition: background 0.08s;
+
+  &--black {
+    border-right: 0;
+    background: rgba($color-black, 0.28);
+  }
+
+  &--held {
+    background: linear-gradient(0deg, rgba($color-white, 0.22), transparent 55%);
+  }
+
+  &--octave {
+    border-left: 2px solid rgba($color-white, 0.28);
+  }
+}
+
+.highwayBar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: rgba($color-white, 0.12);
+  pointer-events: none;
+}
+
+.highwayLine {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 4px;
+  margin-bottom: -2px;
+  opacity: 0.85;
+  background: $color-warning-light;
+  box-shadow: 0 0 12px $color-warning-light;
+  z-index: 2;
+}
+
+.gem {
+  --hue: 215;
+  position: absolute;
+  min-height: 1.4em;
+  padding: 0 4px;
+  font-size: clamp(11px, min(2.2vh, 1.8vw), 20px);
+  box-sizing: border-box;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  pointer-events: none;
+
+  // its tail: as long as the note lasts
+  &::before {
+    content: '';
+    position: absolute;
+    inset: 0 30% 0.7em;
+    border-radius: 0.3em 0.3em 0 0;
+    background: hsl(var(--hue) 55% 40% / 0.55);
+  }
+
+  // its head: the block played when it reaches the line (the line goes through it)
+  &::after {
+    content: '';
+    position: absolute;
+    left: 4px;
+    right: 4px;
+    bottom: 0;
+    height: 1.4em;
+    border-radius: 0.45em;
+    border-bottom: 4px solid hsl(var(--hue) 85% 65%);
+    background: hsl(var(--hue) 55% 34%);
+    box-sizing: border-box;
+  }
+
+  // the next one: bright, outlined, glowing
+  &--next {
+    z-index: 3;
+
+    &::after {
+      background: hsl(var(--hue) 70% 52%);
+      border: 2px solid $color-white;
+      border-bottom: 4px solid $color-white;
+      box-shadow: 0 0 18px hsl(var(--hue) 90% 60%), 0 0 6px $color-white;
+    }
+
+    &::before {
+      background: hsl(var(--hue) 70% 55% / 0.7);
+    }
+  }
+
+  &--outside::after {
+    border-bottom-style: dashed;
+  }
+
+  // on a key: as wide as it (a black key's is narrow)
+  &--key {
+    padding: 0 1px;
+
+    &::after {
+      left: 1px;
+      right: 1px;
+    }
+
+    .gemName {
+      font-size: 0.8em;
+    }
+  }
+
+
+  // played or passed: faded away
+  &--perfect,
+  &--good,
+  &--miss,
+  &--skipped {
+    opacity: 0.3;
+  }
+
+  &--perfect::after {
+    background: rgba($green, 0.6);
+    border-bottom-color: $green;
+  }
+
+  &--miss::after {
+    background: rgba($color-danger-dark, 0.6);
+    border-bottom-color: $color-danger-light;
+  }
+}
+
+.gemName {
+  position: relative;
+  z-index: 1;
+  // (inside the note's head)
+  display: grid;
+  place-items: center;
+  height: 1.4em;
+  line-height: 1;
+  font-weight: bold;
+  white-space: nowrap;
+}
+
+.highwayTargets {
+  display: flex;
+  width: 100%;
+  gap: 4px;
+  margin-top: 4px;
+
+  &--hidden {
+    display: none;
+  }
+}
+
+.highwayTarget {
+  --hue: 215;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  padding: 0.3em 0;
+  border: 2px solid hsl(var(--hue) 60% 55% / 0.6);
+  border-radius: 0.5em;
+  background: hsl(var(--hue) 40% 20% / 0.6);
+  font-size: clamp(11px, min(2vh, 1.6vw), 18px);
+  transition: background 0.08s, transform 0.08s;
+
+  strong {
+    font-size: 1.2em;
+  }
+
+  &--outside {
+    border-style: dashed;
+  }
+
+  &--held {
+    background: hsl(var(--hue) 75% 50%);
+    border-color: hsl(var(--hue) 85% 70%);
+    transform: translateY(2px);
+  }
+}
+
+// the keyboard right under the targets, as wide as the road
+.highwayKeys {
+  width: 100%;
+
+  > div {
+    width: 100%;
+    margin-top: 4px;
+    padding: 0;
   }
 }
 
@@ -810,10 +1143,39 @@ $fs-body: clamp(13px, min(2.3vh, 1.9vw), 19px);
 }
 
 .songPicker {
-  min-width: 16em;
+  display: flex;
   flex: 1;
+  align-items: center;
+  gap: 0.6em;
+  min-width: 14em;
   max-width: 24em;
+  padding: 0.3em 0.9em 0.3em 0.3em;
+  border: 1px solid rgba($color-white, 0.15);
+  border-radius: 0.5em;
+  background: rgba($color-black, 0.3);
+  color: $color-white;
+  font: inherit;
   text-align: left;
+  cursor: pointer;
+
+  &:hover {
+    background: rgba($color-white, 0.08);
+  }
+
+  > svg {
+    margin: 0 0.5em;
+  }
+
+  small {
+    margin-left: auto;
+    opacity: 0.6;
+  }
+}
+
+.songPickerName {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 .tabs {
@@ -1165,6 +1527,29 @@ $fs-body: clamp(13px, min(2.3vh, 1.9vw), 19px);
   object-fit: cover;
 }
 
+.followPaste {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5em;
+
+  a {
+    color: $color-primary-light;
+    white-space: nowrap;
+  }
+
+  input {
+    flex: 1;
+    min-width: 12em;
+    padding: 0.3em 0.7em;
+    border: 1px solid rgba($color-white, 0.2);
+    border-radius: 999px;
+    background: rgba($color-black, 0.25);
+    color: $color-white;
+    font: inherit;
+  }
+}
+
 .followOff {
   display: grid;
   place-items: center;
@@ -1484,20 +1869,14 @@ $fs-body: clamp(13px, min(2.3vh, 1.9vw), 19px);
   animation: appear 0.15s ease-out;
 }
 
-/* while playing: over the game, at the bottom (always in sight, however tall the window) */
-.mixerDock--float {
-  position: fixed;
-  bottom: 1em;
-  left: 50%;
-  z-index: 20;
-  transform: translateX(-50%);
+/* while playing: a panel at the bottom, under the keyboard (in the page: it covers nothing) */
+.mixerDock--panel {
+  flex-shrink: 0;
   flex-direction: column;
   align-items: center;
   gap: 0.6em;
   width: max-content;
   max-width: calc(100vw - 32px);
-  max-height: 45vh;
-  overflow: auto;
   padding: 0.8em 1em 1em;
   border-radius: 12px;
   background: rgb(20 20 24 / 92%);

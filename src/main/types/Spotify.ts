@@ -25,6 +25,8 @@ export type SpotifyPlayer = {
   measuredAt: number;
   /** volume of the device playing (null when Spotify does not tell) */
   volumePercent: number | null;
+  /** how fast it plays (1: the real speed; only YouTube, through the extension, tells it) */
+  rate?: number;
   track: SpotifyTrack;
 };
 

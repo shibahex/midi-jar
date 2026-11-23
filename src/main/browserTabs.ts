@@ -18,6 +18,8 @@ export type BrowserTab = {
   playing: boolean;
   positionMs: number;
   durationMs: number;
+  /** how fast the video plays (1: the real speed; missing: an extension that does not tell) */
+  rate?: number;
   /** when it was there (ms since 1970: the same clock, on this computer) */
   at: number;
 };
@@ -72,6 +74,7 @@ export function startBrowserTabs() {
           playing: !!state.playing,
           positionMs: Number(state.positionMs) || 0,
           durationMs: Number(state.durationMs) || 0,
+          rate: state.rate === undefined ? undefined : Number(state.rate) || 1,
           at: Number(state.at) || Date.now(),
         },
         socket,
@@ -102,14 +105,23 @@ export function listTabs() {
     .filter(({ tab }) => now - tab.at < GONE_MS)
     .map(({ tab }) => {
       // where it is now (it moved on since it told)
-      const elapsed = tab.playing ? now - tab.at : 0;
+      // (a slowed down video moves less than the time that passed)
+      const elapsed = tab.playing ? (now - tab.at) * (tab.rate ?? 1) : 0;
       return { ...tab, positionMs: tab.positionMs + elapsed, at: now };
     });
 }
 
-/** Plays, pauses or moves a tab's video */
-export function controlTab(key: string, action: 'play' | 'pause' | 'seek', ms = 0) {
+/** Plays, pauses or moves a tab's video, or sets its speed ("rate": 1 is the real speed) */
+export function controlTab(key: string, action: 'play' | 'pause' | 'seek' | 'rate', value = 0) {
   const entry = tabs.get(key);
   if (!entry) throw new Error('The tab no longer plays');
-  entry.socket.send(JSON.stringify({ type: 'control', tab: entry.tabId, do: action, ms }));
+  entry.socket.send(
+    JSON.stringify({
+      type: 'control',
+      tab: entry.tabId,
+      do: action,
+      ms: value,
+      rate: action === 'rate' ? value : undefined,
+    })
+  );
 }

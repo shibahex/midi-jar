@@ -10,7 +10,7 @@ const cx = classnames.bind(styles);
 
 /** speeds offered as shortcuts, in percent */
 const PRESETS = [50, 75, 90, 100];
-const MIN_SPEED = 50;
+const MIN_SPEED = 25;
 const MAX_SPEED = 150;
 
 export type PracticeSection = { name: string; bars: number };

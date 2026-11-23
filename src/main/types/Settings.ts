@@ -157,7 +157,7 @@ export type RhythmGameSettings = {
   tonics: Tonics;
   learningMode: boolean;
   fingering: Fingering;
-  /** learning mode: on a miss, keep going, wait for the chord, or slow down */
+  /** on a miss: keep going, wait for the note, or slow down */
   onMiss: 'continue' | 'wait' | 'slowDown';
   gamification: boolean;
   /** practice: speed of the song in percent of its tempo */
@@ -200,6 +200,25 @@ export type RhythmGameSettings = {
   syncBeforeJoin?: boolean;
   /** a song typed by its name plays on YouTube, on Spotify, or not at all (the game alone) */
   playOn?: 'youtube' | 'spotify' | 'none';
+  /**
+   * slowing down a song synced with Spotify (it has no speed): Spotify is paused and the game
+   * plays the song by itself, slower, until it is back to speed; or it waits for the note
+   */
+  spotifySlowDown?: 'game' | 'wait';
+  /** the notes scroll from right to left (a lane), or fall down a highway of 7 lanes */
+  view?: 'lane' | 'highway';
+  /** a part's chords struck again fast (a guitar strumming): played by holding, or each struck */
+  repeatedNotes?: 'hold' | 'each';
+  /** a part's notes are played in their octave (where the keyboard shows them), not any octave */
+  strictOctaves?: boolean;
+  /** the player's keyboard (its keys shown, each one where it is), or the keys of each song */
+  keyboardKeys?: 'fit' | '25' | '37' | '49' | '61' | '76' | '88';
+  /** the learning keyboard: follows the octave played in, or stays in one (moved by hand) */
+  keyboardOctave?: 'song' | 'follow' | 'fixed';
+  /** the octave it stays in (octaves from C4–B5) */
+  keyboardOctaveShift?: number;
+  /** the song's notes shown octaves higher (or lower: negative) */
+  keyboardTranspose?: number;
   /** Spotify: the game plays along with what Spotify plays (when it is an imported song) */
   followSpotify: boolean;
   /** songs whose chords were guessed from the notes can be played as chords (else a part) */
