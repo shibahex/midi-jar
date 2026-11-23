@@ -1,0 +1,270 @@
+@import 'tokens';
+
+.backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: grid;
+  place-items: center;
+  padding: 2em 1em;
+  background: rgba($color-black, 0.55);
+  backdrop-filter: blur(6px);
+}
+
+.base {
+  display: flex;
+  flex-direction: column;
+  width: min(100%, 900px);
+  max-height: 100%;
+  border: 1px solid rgba($color-white, 0.1);
+  border-radius: 0.9em;
+  background: rgba(24, 24, 30, 0.96);
+  box-shadow: 0 1.5em 4em rgba($color-black, 0.5);
+  overflow: hidden;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: 0.6em;
+  padding: 0.9em 1em;
+  border-bottom: 1px solid rgba($color-white, 0.08);
+}
+
+.search {
+  flex: 1;
+  min-width: 0;
+  padding: 0.55em 1em;
+  border: 1px solid rgba($color-white, 0.15);
+  border-radius: 999px;
+  background: rgba($color-black, 0.3);
+  color: $color-white;
+  font: inherit;
+
+  &:focus {
+    outline: none;
+    border-color: $color-primary-light;
+  }
+}
+
+.close {
+  display: grid;
+  place-items: center;
+  width: 2.2em;
+  height: 2.2em;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: $color-white;
+  cursor: pointer;
+
+  &:hover {
+    background: rgba($color-white, 0.1);
+  }
+}
+
+.scroll {
+  padding: 0.4em 1em 1.2em;
+  overflow-y: auto;
+}
+
+.title {
+  margin: 1em 0 0.5em;
+  font-size: 0.8em;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  opacity: 0.6;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 0.6em;
+  margin: 0.6em 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.card {
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  border: 1px solid rgba($color-white, 0.06);
+  border-radius: 0.6em;
+  background: rgba($color-white, 0.04);
+  transition: background 0.12s, border-color 0.12s;
+
+  &:hover {
+    background: rgba($color-white, 0.09);
+  }
+
+  &--editing {
+    grid-column: 1 / -1;
+  }
+
+  &--chosen {
+    border-color: $color-primary-light;
+    background: rgba($color-primary-normal, 0.18);
+  }
+}
+
+.pick {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 0.8em;
+  min-width: 0;
+  padding: 0.5em;
+  border: 0;
+  background: transparent;
+  color: $color-white;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.cover {
+  flex-shrink: 0;
+  width: 3.4em;
+  height: 3.4em;
+  border-radius: 0.4em;
+  object-fit: cover;
+  box-shadow: 0 0.2em 0.6em rgba($color-black, 0.35);
+
+  &--small {
+    width: 2.4em;
+    height: 2.4em;
+  }
+
+  &--letter,
+  &--random {
+    display: grid;
+    place-items: center;
+    font-size: 1.4em;
+    font-weight: 700;
+  }
+
+  &--letter {
+    background: linear-gradient(135deg, hsl(var(--hue), 45%, 38%), hsl(var(--hue), 55%, 22%));
+  }
+
+  &--small.cover--letter {
+    font-size: 1em;
+  }
+
+  &--random {
+    background: rgba($color-white, 0.1);
+  }
+}
+
+.text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: 0.1em;
+}
+
+.name,
+.artist,
+.details {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.artist {
+  opacity: 0.75;
+}
+
+.details {
+  font-size: 0.8em;
+  opacity: 0.55;
+}
+
+.remove {
+  align-self: center;
+  margin-right: 0.4em;
+  padding: 0.35em 0.5em;
+  border: 0;
+  border-radius: 0.4em;
+  background: transparent;
+  color: $color-white;
+  font: inherit;
+  font-size: 0.85em;
+  opacity: 0;
+  cursor: pointer;
+
+  .card:hover &,
+  &:focus,
+  &--confirm {
+    opacity: 0.8;
+  }
+
+  &:hover,
+  &--confirm {
+    background: rgba(220, 60, 60, 0.35);
+    opacity: 1;
+  }
+}
+
+.edit {
+  align-self: center;
+  display: grid;
+  place-items: center;
+  width: 2em;
+  height: 2em;
+  padding: 0;
+  border: 0;
+  border-radius: 0.4em;
+  background: transparent;
+  color: $color-white;
+  opacity: 0;
+  cursor: pointer;
+
+  .card:hover &,
+  &:focus,
+  &--on {
+    opacity: 0.8;
+  }
+
+  &:hover,
+  &--on {
+    background: rgba($color-white, 0.12);
+    opacity: 1;
+  }
+}
+
+// a song edited: its tempo and its link, below it
+.editor {
+  display: flex;
+  flex-basis: 100%;
+  flex-direction: column;
+  gap: 0.6em;
+  padding: 0.6em 0.8em 0.8em;
+  border-top: 1px solid rgba($color-white, 0.08);
+  font-size: 0.9em;
+}
+
+.tempo {
+  display: flex;
+  align-items: center;
+  gap: 0.5em;
+
+  input {
+    width: 5em;
+    padding: 0.2em 0.4em;
+    border: 1px solid rgba($color-white, 0.2);
+    border-radius: 0.3em;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+  }
+}
+
+.empty {
+  margin: 2em 0;
+  text-align: center;
+  opacity: 0.6;
+}

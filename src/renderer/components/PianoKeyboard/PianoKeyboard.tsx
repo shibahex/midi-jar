@@ -31,6 +31,8 @@ const defaultProps = {
   targets: null,
   exactTargets: false,
   softTargets: null,
+  otherOctave: null,
+  rightPlayed: null,
   chord: undefined,
 };
 
@@ -45,6 +47,8 @@ export const PianoKeyboard: React.FC<PianoKeyboardProps> = ({
   targets,
   exactTargets,
   softTargets,
+  otherOctave,
+  rightPlayed,
   chord,
 }) => {
   const pianoRef = useRef<HTMLDivElement>(null);
@@ -57,6 +61,8 @@ export const PianoKeyboard: React.FC<PianoKeyboardProps> = ({
       fadeNotes(pianoRef.current, 'wrapSustained');
       fadeNotes(pianoRef.current, 'exactTarget');
       fadeNotes(pianoRef.current, 'wrapExactTarget');
+      fadeNotes(pianoRef.current, 'otherOctave');
+      fadeNotes(pianoRef.current, 'rightPlayed');
       fadeTargets(pianoRef.current);
       fadeTargets(pianoRef.current, 'softTarget');
       fadeLabels(pianoRef.current);
@@ -82,6 +88,14 @@ export const PianoKeyboard: React.FC<PianoKeyboardProps> = ({
           );
           highlightWrapLabels(pianoRef.current, keySignature, keyboard, targets, chord);
         }
+      }
+
+      if (otherOctave) {
+        highlightNotes(pianoRef.current, otherOctave, 'otherOctave');
+      }
+
+      if (rightPlayed) {
+        highlightNotes(pianoRef.current, rightPlayed, 'rightPlayed');
       }
 
       if (played) {
@@ -120,7 +134,19 @@ export const PianoKeyboard: React.FC<PianoKeyboardProps> = ({
         }
       }
     }
-  }, [played, sustained, midi, targets, softTargets, chord, keyboard, keySignature, exactTargets]);
+  }, [
+    played,
+    sustained,
+    midi,
+    targets,
+    softTargets,
+    otherOctave,
+    rightPlayed,
+    chord,
+    keyboard,
+    keySignature,
+    exactTargets,
+  ]);
 
   useEffect(() => {
     if (pianoRef.current) {

@@ -199,7 +199,8 @@
   .note {
     &:global(.exactTarget) {
       .pianoKeyBackground {
-        fill: $color-primary-normal;
+        // (a color of its own: --target-color, e.g. the highway lane of the note)
+        fill: var(--target-color, #{$color-primary-normal});
       }
 
       .pianoKeyName,
@@ -275,5 +276,43 @@
         fill: $color-white;
       }
     }
+  }
+}
+
+// a note of the keys to play, played in another octave (it counts): amber, not red
+.--withTargets .note:global(.otherOctave) {
+  .pianoKeyBackground {
+    fill: #d9952b;
+    stroke: $color-white;
+  }
+
+    .pianoKey {
+      fill: none;
+      opacity: 0;
+    }
+
+  .pianoKeyName,
+  .pianoInfo,
+  .pianoTonic {
+    fill: $color-white;
+  }
+}
+
+// a key still held from the notes just played right: green (the next notes are shown already)
+.--withTargets .note:global(.rightPlayed) {
+  .pianoKeyBackground {
+    fill: $color-success-normal;
+    stroke: $color-white;
+  }
+
+    .pianoKey {
+      fill: none;
+      opacity: 0;
+    }
+
+  .pianoKeyName,
+  .pianoInfo,
+  .pianoTonic {
+    fill: $color-white;
   }
 }

@@ -5,7 +5,7 @@ import { Button, FormControlLabel, FormField, Input, Select, Switch } from '@la-
 import { useSettings } from 'renderer/contexts/Settings';
 import { Icon } from 'renderer/components';
 import { ImportedSong, SpotifyStatus, SpotifyTrack } from 'main/types';
-import { estimateFirstChordMs } from 'renderer/helpers';
+import { sourceName, spotifyLinkFor } from 'renderer/helpers';
 import { COMPUTER_SOUND, getSoundInputs } from 'renderer/helpers/audioSync';
 
 import styles from '../ChordQuizSettings/ChordQuizSettings.module.scss';
@@ -17,6 +17,7 @@ const SYNCED_BY = {
   tap: 'set by hand',
   playing: 'from your playing',
   listening: 'by listening to it',
+  parts: 'by listening to parts of it',
 };
 
 /** Messages of the main process: "Error invoking remote method ...: Error: message" */
@@ -65,7 +66,7 @@ export const SpotifySettings: React.FC = () => {
   };
 
   // sound inputs to listen to the song (named once allowed to listen)
-  const listenSync = game.listenSync !== false;
+  const listenSync = !!game.spotifySync;
   const [inputs, setInputs] = useState<{ id: string; label: string }[]>([]);
   useEffect(() => {
     if (!listenSync) return;
@@ -78,6 +79,19 @@ export const SpotifySettings: React.FC = () => {
       .catch(() => setInputs([]));
   }, [listenSync]);
 
+  // MIDI Jar's browser extension: every YouTube tab, not only the one the browser tells
+  const [extension, setExtension] = useState<{ path: string; connected: boolean } | null>(null);
+  useEffect(() => {
+    const check = () =>
+      window.app.youtube
+        .extension()
+        .then(setExtension)
+        .catch(() => {});
+    check();
+    const timer = setInterval(check, 3000);
+    return () => clearInterval(timer);
+  }, []);
+
   const disconnect = async () => {
     await window.app.spotify.logout();
     refresh();
@@ -87,27 +101,32 @@ export const SpotifySettings: React.FC = () => {
     <div className={cx('group')}>
       <div className={cx('groupTitle')}>
         <Icon name="music" />
-        Spotify
+        Spotify &amp; YouTube
       </div>
       <div className={cx('groupHint')}>
-        Play imported songs on Spotify in time with the game. Once:
-        <ol className={cx('steps')}>
-          <li>
-            Create an app on{' '}
-            <a href="https://developer.spotify.com/dashboard" target="_blank" rel="noreferrer">
-              developer.spotify.com/dashboard
-            </a>{' '}
-            (any name, &quot;Web API&quot; checked)
-          </li>
-          <li>
-            Add this Redirect URI to it: <code className={cx('code')}>{redirectUri}</code>
-          </li>
-          <li>Paste its Client ID below and connect</li>
-        </ol>
-        Then link a song to Spotify in the list of imported songs, and sync it once (tap on its
-        first chord). Starting the song from the game needs Spotify Premium; without it, press play
-        in Spotify and the game follows.
+        Play your songs with the real recording, in time with the game. YouTube needs no account:
+        play the video in your browser and the game follows it (Linux and Windows).
       </div>
+      {!status?.connected && (
+        <div className={cx('groupHint')}>
+          To connect, once:
+          <ol className={cx('steps')}>
+            <li>
+              Create an app on{' '}
+              <a href="https://developer.spotify.com/dashboard" target="_blank" rel="noreferrer">
+                developer.spotify.com/dashboard
+              </a>{' '}
+              (any name, &quot;Web API&quot; checked)
+            </li>
+            <li>
+              Add this Redirect URI to it: <code className={cx('code')}>{redirectUri}</code>
+            </li>
+            <li>Paste its Client ID below and connect</li>
+          </ol>
+          Starting songs from the game needs Spotify Premium; without it, play them in Spotify and
+          the game follows. For YouTube alone, skip this.
+        </div>
+      )}
 
       <div className={cx('spotifyLogin')}>
         <Input
@@ -134,8 +153,8 @@ export const SpotifySettings: React.FC = () => {
       </div>
 
       <FormControlLabel
-        label="Sync With Spotify"
-        hint="Songs linked to Spotify play there, and the game follows them (at the song's tempo: no slow down or wait on a miss)"
+        label="Play With The Recording"
+        hint="Your songs play on Spotify or YouTube and the game follows the recording (no slowing down or waiting on a miss)"
         reverse
       >
         <Switch
@@ -144,21 +163,10 @@ export const SpotifySettings: React.FC = () => {
         />
       </FormControlLabel>
 
-      <FormControlLabel
-        label="Sync By Listening"
-        hint="While a song plays on Spotify, the game listens to it and moves the sync to match (its own sound is off for a few seconds meanwhile)"
-        reverse
-      >
-        <Switch
-          checked={listenSync}
-          onChange={(value) => updateSetting('rhythmGame.listenSync', value)}
-        />
-      </FormControlLabel>
-
-      {listenSync && (
+      {game.spotifySync && (
         <FormField
           label="Listen To"
-          hint="The sound of the computer hears Spotify best (Linux, with PipeWire or PulseAudio); a microphone near the speakers works too"
+          hint="To sync songs, the game listens to the recording: the sound of the computer hears it best (PipeWire or PulseAudio on Linux, or Windows); a microphone near the speakers works too"
         >
           <Select
             aria-label="Sound input"
@@ -176,12 +184,60 @@ export const SpotifySettings: React.FC = () => {
           />
         </FormField>
       )}
+
+      <FormField
+        label="Browser Extension"
+        hint="To see every YouTube video playing (not only the last one of each browser), and play, pause or move the very tab: add it to your browser once"
+      >
+        <div className={cx('groupHint')}>
+          {extension?.connected ? (
+            <strong>Connected: every YouTube tab is seen</strong>
+          ) : (
+            <ol className={cx('steps')}>
+              <li>
+                Chrome, Chromium, Edge, Brave: open{' '}
+                <code className={cx('code')}>chrome://extensions</code>, turn on Developer mode,
+                then &quot;Load unpacked&quot; and pick this folder
+              </li>
+              <li>
+                Firefox: open{' '}
+                <code className={cx('code')}>about:debugging#/runtime/this-firefox</code>,
+                &quot;Load Temporary Add-on&quot;, and pick{' '}
+                <code className={cx('code')}>manifest.json</code> in this folder
+              </li>
+            </ol>
+          )}
+          <code className={cx('code')}>{extension?.path}</code>{' '}
+          <Button
+            size="sm"
+            variant="ghost"
+            intent="neutral"
+            onClick={() => window.app.youtube.openExtension()}
+          >
+            Open the folder
+          </Button>
+        </div>
+      </FormField>
+
+      {game.spotifySync && (
+        <FormControlLabel
+          label="Sync Before Playing Along"
+          hint="Playing along with a song not synced by listening yet: parts of it are heard first (about a minute), then the game joins it. Off: it joins at once, synced by its estimate (sync it later from the song's card)"
+          reverse
+        >
+          <Switch
+            checked={!!game.syncBeforeJoin}
+            onChange={(value) => updateSetting('rhythmGame.syncBeforeJoin', value)}
+          />
+        </FormControlLabel>
+      )}
     </div>
   );
 };
 
 /**
- * The Spotify link of an imported song: find it on Spotify, and adjust where its first chord is
+ * The Spotify (or YouTube) link of an imported song: find it on Spotify or YouTube, or paste
+ * a YouTube link, and adjust where its first chord is
  */
 export const SpotifySongLink: React.FC<{
   song: ImportedSong;
@@ -191,27 +247,19 @@ export const SpotifySongLink: React.FC<{
   const [error, setError] = useState('');
 
   // a linked track is synced right away: where the first chord is, estimated
-  const link = async (track: SpotifyTrack) => {
-    const bars = await window.app.spotify.bars(track.uri).catch(() => null);
-    const firstChordMs = estimateFirstChordMs(song, track.durationMs, bars) ?? undefined;
-    onChange({
-      uri: track.uri,
-      name: `${track.name} (${track.artists})`,
-      durationMs: track.durationMs,
-      firstChordMs,
-      syncedBy: firstChordMs !== undefined ? 'estimate' : undefined,
-    });
-  };
+  const link = async (track: SpotifyTrack) => onChange(await spotifyLinkFor(song, track));
 
-  const find = async () => {
+  // the song name without "by" (without what is between brackets, like "(AI)": not part of
+  // the name on Spotify or YouTube)
+  const query = song.title.replace(/\s*[([][^)\]]*[)\]]/g, '').replace(/\s+by\s+/i, ' ');
+
+  /** Links the track found (busy meanwhile, an error shown when there is none) */
+  const linkFound = async (findTrack: () => Promise<SpotifyTrack | null | undefined>) => {
     setBusy(true);
     setError('');
     try {
-      // the song name without "by", then the one playing in Spotify if nothing is found
-      const query = song.title.replace(/\s+by\s+/i, ' ');
-      const track =
-        (await window.app.spotify.search(query)) ?? (await window.app.spotify.player())?.track;
-      if (!track) throw new Error('Not found on Spotify');
+      const track = await findTrack();
+      if (!track) throw new Error('Not found');
       await link(track);
     } catch (e) {
       setError(errorText(e));
@@ -219,6 +267,19 @@ export const SpotifySongLink: React.FC<{
       setBusy(false);
     }
   };
+
+  // then the one playing in Spotify if nothing is found
+  const find = () =>
+    linkFound(
+      async () =>
+        (await window.app.spotify.search(query)) ?? (await window.app.spotify.player())?.track
+    );
+
+  const findOnYouTube = () => linkFound(() => window.app.youtube.search(query));
+
+  // a video's link pasted
+  const [videoLink, setVideoLink] = useState('');
+  const linkVideo = () => linkFound(() => window.app.youtube.video(videoLink));
 
   const useCurrent = async () => {
     setError('');
@@ -231,13 +292,18 @@ export const SpotifySongLink: React.FC<{
     }
   };
 
-  const nudge = (ms: number) =>
-    song.spotify &&
+  // (the beats heard move with it: still synced by listening)
+  const nudge = (ms: number) => {
+    if (!song.spotify) return;
+    const firstChordMs = Math.max(0, (song.spotify.firstChordMs ?? 0) + ms);
+    const moved = firstChordMs - (song.spotify.firstChordMs ?? 0);
     onChange({
       ...song.spotify,
-      firstChordMs: Math.max(0, (song.spotify.firstChordMs ?? 0) + ms),
-      syncedBy: 'tap',
+      firstChordMs,
+      syncedBy: song.spotify.beatTimes ? song.spotify.syncedBy : 'tap',
+      beatTimes: song.spotify.beatTimes?.map((beatMs) => beatMs + moved),
     });
+  };
 
   if (!song.spotify) {
     return (
@@ -245,9 +311,24 @@ export const SpotifySongLink: React.FC<{
         <Button size="sm" intent="neutral" onClick={find} disabled={busy}>
           {busy ? 'Searching...' : 'Find on Spotify'}
         </Button>
+        <Button size="sm" intent="neutral" onClick={findOnYouTube} disabled={busy}>
+          Find on YouTube
+        </Button>
         <Button size="sm" variant="ghost" intent="neutral" onClick={useCurrent}>
           Use the one playing
         </Button>
+        <Input
+          size="sm"
+          value={videoLink}
+          onChange={setVideoLink}
+          placeholder="or a YouTube link"
+          aria-label="YouTube link"
+        />
+        {videoLink.trim() && (
+          <Button size="sm" intent="neutral" onClick={linkVideo} disabled={busy}>
+            Link
+          </Button>
+        )}
         {error && <span className={cx('importMessage', 'importMessage--error')}>{error}</span>}
       </div>
     );
@@ -256,14 +337,16 @@ export const SpotifySongLink: React.FC<{
   return (
     <div className={cx('spotifySong')}>
       <span className={cx('spotifyName')} title={song.spotify.uri}>
-        Spotify: {song.spotify.name}
+        {sourceName(song.spotify.uri)}: {song.spotify.name}
       </span>
       {song.spotify.firstChordMs === undefined ? (
         <span className={cx('spotifyHint')}>not synced yet (Sync in the game)</span>
       ) : (
         <span className={cx('spotifyOffset')} title="Where the first chord is in the recording">
           first chord at {(song.spotify.firstChordMs / 1000).toFixed(2)} s
-          {song.spotify.syncedBy && ` (${SYNCED_BY[song.spotify.syncedBy]})`}
+          {song.spotify.beatTimes && song.spotify.syncedBy !== 'parts'
+            ? ' (every beat found by listening to the whole song)'
+            : song.spotify.syncedBy && ` (${SYNCED_BY[song.spotify.syncedBy]})`}
           <button type="button" onClick={() => nudge(-50)} title="50 ms earlier">
             −
           </button>
@@ -276,7 +359,7 @@ export const SpotifySongLink: React.FC<{
         type="button"
         className={cx('spotifyUnlink')}
         onClick={() => onChange(undefined)}
-        title="Unlink from Spotify"
+        title={`Unlink from ${sourceName(song.spotify.uri)}`}
       >
         Unlink
       </button>

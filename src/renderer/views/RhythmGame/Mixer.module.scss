@@ -4,6 +4,7 @@
   display: flex;
   justify-content: center;
   align-items: flex-start;
+  flex-wrap: wrap;
   gap: 0.9em;
   padding: 0.6em 0.8em;
   border-radius: 0.6em;
@@ -18,8 +19,78 @@
   gap: 0.25em;
   width: 5.6em;
 
-  &--muted {
+  &--apart {
+    margin-right: 0.4em;
+    padding-right: 0.6em;
+    border-right: 1px solid rgba($color-white, 0.15);
+  }
+
+  // muted: dimmed, its mute and play buttons still bright
+  &--muted > :not(.mute):not(.play) {
     opacity: 0.4;
+  }
+
+  // the part the player plays
+  &--playing {
+    padding: 0.2em 0 0.3em;
+    border-radius: 0.5em;
+    background: rgba($color-primary-normal, 0.18);
+    box-shadow: 0 0 0 1px rgba($color-primary-light, 0.6);
+  }
+}
+
+// pick the part the player plays
+.play {
+  width: 100%;
+  padding: 0.1em 0.3em;
+  border: 1px solid rgba($color-white, 0.25);
+  border-radius: 4px;
+  background: transparent;
+  color: rgba($color-white, 0.8);
+  font: inherit;
+  font-size: 0.7em;
+  font-weight: bold;
+  cursor: pointer;
+
+  &:hover {
+    background: rgba($color-white, 0.1);
+  }
+
+  &--on {
+    border-color: $color-primary-light;
+    background: $color-primary-normal;
+    color: $color-white;
+
+    &:hover {
+      background: $color-primary-light;
+    }
+  }
+}
+
+.mute {
+  min-width: 1.9em;
+  padding: 0.05em 0.4em;
+  border: 1px solid rgba($color-white, 0.25);
+  border-radius: 4px;
+  background: transparent;
+  color: rgba($color-white, 0.7);
+  font: inherit;
+  font-size: 0.7em;
+  font-weight: bold;
+  cursor: pointer;
+
+  &:hover {
+    background: rgba($color-white, 0.1);
+  }
+
+  &--on {
+    border-color: $color-warning-normal;
+    background: $color-warning-normal;
+    color: $color-black;
+
+    &:hover {
+      background: $color-warning-light;
+    }
   }
 }
 

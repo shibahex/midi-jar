@@ -88,6 +88,9 @@
 }
 
 .importedSongs {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
   width: 100%;
   margin: 0;
   padding: 0;
@@ -96,12 +99,32 @@
   li {
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    gap: 8px;
+    gap: 10px;
+    padding: 6px 8px;
+    border-radius: 8px;
+    background: rgba($color-white, 0.04);
   }
 
   small {
+    display: block;
     opacity: 0.6;
+  }
+}
+
+.importedSongText {
+  flex: 1;
+  min-width: 0;
+
+  strong,
+  span,
+  small {
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+
+  span {
+    opacity: 0.75;
   }
 }
 
@@ -146,6 +169,41 @@
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: $color-primary-light;
+}
+
+// a group shown when opened (the settings rarely changed)
+.more {
+  padding-bottom: 0.8em;
+
+  > summary {
+    cursor: pointer;
+    list-style: none;
+
+    &::-webkit-details-marker {
+      display: none;
+    }
+
+    &::after {
+      content: '▸';
+      margin-left: auto;
+      transition: transform 0.15s;
+    }
+  }
+
+  &[open] > summary {
+    margin-bottom: 0.6em;
+
+    &::after {
+      transform: rotate(90deg);
+    }
+  }
+}
+
+.songsterrNote {
+  padding: 0.5em 0.7em;
+  border-left: 3px solid $color-primary-light;
+  border-radius: 0.3em;
+  background: rgba($color-primary-dark, 0.35);
 }
 
 .groupHint {

@@ -16,6 +16,49 @@
   width: 100%;
 }
 
+.hint {
+  margin-top: 0.4em;
+  padding: 0.25em 0.8em;
+  border-radius: 999px;
+  font-size: 0.9em;
+  font-weight: bold;
+  text-align: center;
+
+  &--danger {
+    background: rgba($color-danger-normal, 0.3);
+  }
+
+  &--warning {
+    background: rgba(#d9952b, 0.35);
+  }
+}
+
+.octaves {
+  display: flex;
+  gap: 2px;
+  margin-top: 2px;
+}
+
+// an octave of the keys (lit: the notes to play are in it)
+.octavesCell {
+  flex: 1 1 0;
+  overflow: hidden;
+  white-space: nowrap;
+  padding: 0.15em 0;
+  border-radius: 0 0 0.4em 0.4em;
+  background: rgba($color-white, 0.06);
+  font-size: 0.8em;
+  font-weight: bold;
+  letter-spacing: 0.05em;
+  text-align: center;
+  opacity: 0.6;
+
+  &--lit {
+    background: rgba($color-white, 0.2);
+    opacity: 1;
+  }
+}
+
 .fingers {
   display: flex;
   flex-wrap: wrap;
@@ -70,5 +113,36 @@
 
   &--soft {
     background: $color-neutral-lighter;
+  }
+
+  &--otherOctave {
+    background: #d9952b;
+  }
+}
+
+.octave {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 0.6em;
+  margin-top: 0.4em;
+  font-size: 0.85em;
+  opacity: 0.85;
+}
+
+.octaveButton {
+  width: 1.8em;
+  height: 1.8em;
+  padding: 0;
+  border: 1px solid rgba($color-white, 0.25);
+  border-radius: 50%;
+  background: rgba($color-white, 0.08);
+  color: $color-white;
+  font: inherit;
+  line-height: 1;
+  cursor: pointer;
+
+  &:hover {
+    background: rgba($color-white, 0.18);
   }
 }

@@ -14,3 +14,5 @@ export * from './songs';
 export * from './solo';
 export * from './songsterr';
 export * from './spotifySync';
+export * from './songImport';
+export * from './alignment';

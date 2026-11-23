@@ -12,6 +12,10 @@ export type SpotifyTrack = {
   name: string;
   artists: string;
   durationMs: number;
+  /** the track asked for, when Spotify plays another release of the same song */
+  linkedFromUri?: string;
+  /** the cover of its album */
+  imageUrl?: string;
 };
 
 /** What Spotify plays, and where it was in the track when asked */
@@ -21,6 +25,8 @@ export type SpotifyPlayer = {
   measuredAt: number;
   /** volume of the device playing (null when Spotify does not tell) */
   volumePercent: number | null;
+  /** how fast it plays (1: the real speed; only YouTube, through the extension, tells it) */
+  rate?: number;
   track: SpotifyTrack;
 };
 

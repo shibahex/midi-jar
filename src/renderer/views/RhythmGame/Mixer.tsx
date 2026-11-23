@@ -10,9 +10,14 @@ export type MixerChannel = {
   label: string;
   value: number;
   muted?: boolean;
+  /** set apart from the others (the master volume) */
+  apart?: boolean;
   /** the instrument playing it, and the ones to pick from ("" : the default one) */
   instrument?: string;
   instruments?: { value: string; label: string }[];
+  /** the player can play it (its notes, or the chords), and plays it now */
+  playable?: boolean;
+  playing?: boolean;
 };
 
 type Props = {
@@ -23,6 +28,10 @@ type Props = {
   onChange: (id: string, value: number) => void;
   /** an instrument is picked for a part */
   onInstrument?: (id: string, instrument: string) => void;
+  /** a part is muted, or heard again */
+  onMute?: (id: string, muted: boolean) => void;
+  /** a part is picked to be played by the player */
+  onPlay?: (id: string) => void;
 };
 
 const VolumeBar: React.FC<{
@@ -30,7 +39,9 @@ const VolumeBar: React.FC<{
   onInput: Props['onInput'];
   onChange: Props['onChange'];
   onInstrument: Props['onInstrument'];
-}> = ({ channel, onInput, onChange, onInstrument }) => {
+  onMute: Props['onMute'];
+  onPlay: Props['onPlay'];
+}> = ({ channel, onInput, onChange, onInstrument, onMute, onPlay }) => {
   const track = useRef<HTMLDivElement>(null);
   const [value, setValue] = useState(channel.value);
   const dragging = useRef(false);
@@ -53,7 +64,13 @@ const VolumeBar: React.FC<{
   };
 
   return (
-    <div className={cx('channel', { 'channel--muted': channel.muted })}>
+    <div
+      className={cx('channel', {
+        'channel--muted': channel.muted,
+        'channel--apart': channel.apart,
+        'channel--playing': channel.playing,
+      })}
+    >
       <span className={cx('value')}>{value}</span>
       <div
         ref={track}
@@ -88,6 +105,30 @@ const VolumeBar: React.FC<{
         <div className={cx('fill')} style={{ height: `${value}%` }} />
       </div>
       <span className={cx('label')}>{channel.label}</span>
+      {channel.playable && onPlay && (
+        <button
+          type="button"
+          className={cx('play', { 'play--on': channel.playing })}
+          aria-pressed={!!channel.playing}
+          aria-label={`Play the ${channel.label}`}
+          title={channel.playing ? `You play the ${channel.label}` : `Play the ${channel.label}`}
+          onClick={() => onPlay(channel.id)}
+        >
+          {channel.playing ? 'You play' : 'Play'}
+        </button>
+      )}
+      {onMute && (
+        <button
+          type="button"
+          className={cx('mute', { 'mute--on': channel.muted })}
+          aria-pressed={!!channel.muted}
+          aria-label={`Mute ${channel.label}`}
+          title={channel.muted ? 'Muted: click to hear it again' : 'Mute'}
+          onClick={() => onMute(channel.id, !channel.muted)}
+        >
+          M
+        </button>
+      )}
       {channel.instruments && (
         <select
           className={cx('instrument')}
@@ -110,7 +151,7 @@ const VolumeBar: React.FC<{
 /**
  * Volume bars, one per part: drag a bar (or use the arrow keys) to set its volume
  */
-const Mixer: React.FC<Props> = ({ channels, onInput, onChange, onInstrument }) => {
+const Mixer: React.FC<Props> = ({ channels, onInput, onChange, onInstrument, onMute, onPlay }) => {
   return (
     <div className={cx('base')} role="group" aria-label="Volumes">
       {channels.map((channel) => (
@@ -120,6 +161,8 @@ const Mixer: React.FC<Props> = ({ channels, onInput, onChange, onInstrument }) =
           onInput={onInput}
           onChange={onChange}
           onInstrument={onInstrument}
+          onMute={onMute}
+          onPlay={onPlay}
         />
       ))}
     </div>
@@ -128,6 +171,8 @@ const Mixer: React.FC<Props> = ({ channels, onInput, onChange, onInstrument }) =
 
 Mixer.defaultProps = {
   onInstrument: undefined,
+  onMute: undefined,
+  onPlay: undefined,
 };
 
 export default Mixer;

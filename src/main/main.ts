@@ -16,6 +16,8 @@ import MenuBuilder from './menu';
 import { startServer } from './server';
 import { startRefreshLoop } from './midi';
 import { bindWindowEvents } from './api';
+import { allowLoopbackSound } from './soundCapture';
+import { startBrowserTabs } from './browserTabs';
 import { registerWebsocketSubscriptions } from './wsApi';
 import { setStartupSetting, isHiddenStartupLaunch } from './settings';
 import {
@@ -202,6 +204,8 @@ app
   .then(() => {
     registerWebsocketSubscriptions();
     startRefreshLoop();
+    allowLoopbackSound();
+    startBrowserTabs();
     firstOpenWindow();
     createTray();
     app.on('activate', () => {
